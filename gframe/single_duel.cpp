@@ -12,7 +12,7 @@ namespace ygo {
 extern unsigned int lflist;
 extern unsigned char rule;
 extern unsigned char mode;
-extern bool enable_priority;
+extern unsigned char duel_rule;
 extern bool no_check_deck;
 extern bool no_shuffle_deck;
 extern unsigned int start_lp;
@@ -84,22 +84,22 @@ void SingleDuel::JoinGame(DuelPlayer* dp, void* pdata, bool is_creater) {
 			host_info.mode=1;
 			host_info.no_check_deck=false;
 			host_info.no_shuffle_deck=false;
-			host_info.enable_priority=false;
+			host_info.duel_rule=3;
 			host_info.rule=0;
 			host_info.time_limit=180;
 			host_info.replay_mode=0;
 
 			if (ygo::start_hand !=0 ){
-		        host_info.start_hand=ygo::start_hand;
-		        host_info.start_lp=ygo::start_lp;
-		        host_info.draw_count=ygo::draw_count;
-		        host_info.mode=ygo::mode;
-		        host_info.no_check_deck=ygo::no_check_deck;
-		        host_info.no_shuffle_deck=ygo::no_shuffle_deck;
-		        host_info.enable_priority=ygo::enable_priority;
-		        host_info.rule=ygo::rule;
-		        host_info.time_limit=ygo::time_limit;
-		        host_info.replay_mode=ygo::replay_mode;
+				host_info.start_hand=ygo::start_hand;
+				host_info.start_lp=ygo::start_lp;
+				host_info.draw_count=ygo::draw_count;
+				host_info.mode=ygo::mode;
+				host_info.no_check_deck=ygo::no_check_deck;
+				host_info.no_shuffle_deck=ygo::no_shuffle_deck;
+				host_info.duel_rule=ygo::duel_rule;
+				host_info.rule=ygo::rule;
+				host_info.time_limit=ygo::time_limit;
+				host_info.replay_mode=ygo::replay_mode;
 			}
 		}else
 		{
@@ -500,9 +500,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	pduel = create_duel(rnd.rand());
 	set_player_info(pduel, 0, host_info.start_lp, host_info.start_hand, host_info.draw_count);
 	set_player_info(pduel, 1, host_info.start_lp, host_info.start_hand, host_info.draw_count);
-	int opt = 0;
-	if(host_info.enable_priority)
-		opt |= DUEL_OBSOLETE_RULING;
+	int opt = ((int)host_info.duel_rule + 1) << 16;
 	if(host_info.no_shuffle_deck)
 		opt |= DUEL_PSEUDO_SHUFFLE;
 	last_replay.WriteInt32(host_info.start_lp, false);
@@ -1451,6 +1449,20 @@ int SingleDuel::Analyze(char* msgbuffer, unsigned int len) {
 			for(auto oit = observers.begin(); oit != observers.end(); ++oit)
 				NetServer::ReSendToPlayer(*oit);
 			for(auto oit = recorders.begin(); oit != recorders.end(); ++oit)
+				NetServer::ReSendToPlayer(*oit);
+			break;
+		}
+		case MSG_ROCK_PAPER_SCISSORS: {
+			player = BufferIO::ReadInt8(pbuf);
+			WaitforResponse(player);
+			NetServer::SendBufferToPlayer(players[player], STOC_GAME_MSG, offset, pbuf - offset);
+			return 1;
+		}
+		case MSG_HAND_RES: {
+			pbuf += 1;
+			NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, offset, pbuf - offset);
+			NetServer::ReSendToPlayer(players[1]);
+			for (auto oit = observers.begin(); oit != observers.end(); ++oit)
 				NetServer::ReSendToPlayer(*oit);
 			break;
 		}

@@ -6,7 +6,7 @@
 int enable_log = 1;
 bool exit_on_return = false;
 bool runasserver = true;
-
+bool keep_on_return = false;
 bool open_file = false;
 wchar_t open_file_name[256] = L"";
 
@@ -26,7 +26,8 @@ void GetParameterW(wchar_t* param, const char* arg) {
 	BufferIO::DecodeUTF8(arg, param);
 #endif
 }
-/*void ClickButton(irr::gui::IGUIElement* btn) {
+/*
+void ClickButton(irr::gui::IGUIElement* btn) {
 	irr::SEvent event;
 	event.EventType = irr::EET_GUI_EVENT;
 	event.GUIEvent.EventType = irr::gui::EGET_BUTTON_CLICKED;
@@ -53,7 +54,7 @@ int main(int argc, char* argv[]) {
 #endif //_WIN32
 	ygo::Game _game;
 	if (runasserver){
-	    ygo::aServerPort=7911;
+		ygo::aServerPort=7911;
 		ygo::aServerPort=atoi(argv[1]);
 		ygo::lflist=atoi(argv[2]);
 		ygo::start_hand=0;
@@ -62,9 +63,9 @@ int main(int argc, char* argv[]) {
 			ygo::rule=atoi(argv[3]);
 			ygo::mode=atoi(argv[4]);
 			if (argv[5][0]=='T')
-				ygo::enable_priority=true;
+				ygo::duel_rule=2;
 			else
-				ygo::enable_priority=false;
+				ygo::duel_rule=3;
 			if (argv[6][0]=='T')
 				ygo::no_check_deck=true;
 			else
@@ -85,7 +86,7 @@ int main(int argc, char* argv[]) {
 		
 		return 0;
 	}
-    /*
+	/*
 	ygo::mainGame = &_game;
 	if(!ygo::mainGame->Initialize())
 		return 0;
@@ -130,18 +131,29 @@ int main(int argc, char* argv[]) {
 		} else if(!strcmp(argv[i], "-k")) { // Keep on return
 			exit_on_return = false;
 			keep_on_return = true;
+		} else if(!strcmp(argv[i], "-d")) { // Deck
+			if(i + 2 < argc) { // select deck
+				++i;
+				GetParameterW(ygo::mainGame->gameConf.lastdeck, &argv[i][0]);
+				continue;
+			} else { // open deck
+				exit_on_return = !keep_on_return;
+				if(i < argc) {
+					open_file = true;
+					GetParameterW(open_file_name, &argv[i + 1][0]);
+				}
+				ClickButton(ygo::mainGame->btnDeckEdit);
+				break;
+			}
+		} else if(!strcmp(argv[i], "-c")) { // Create host
+			exit_on_return = !keep_on_return;
+			ygo::mainGame->HideElement(ygo::mainGame->wMainMenu);
+			ClickButton(ygo::mainGame->btnHostConfirm);
+			break;
 		} else if(!strcmp(argv[i], "-j")) { // Join host
 			exit_on_return = !keep_on_return;
 			ClickButton(ygo::mainGame->btnLanMode);
 			ClickButton(ygo::mainGame->btnJoinHost);
-			break;
-		} else if(!strcmp(argv[i], "-d")) { // Deck
-			exit_on_return = !keep_on_return;
-			if(i < argc) {
-				open_file = true;
-				GetParameterW(open_file_name, &argv[i + 1][0]);
-			}
-			ClickButton(ygo::mainGame->btnDeckEdit);
 			break;
 		} else if(!strcmp(argv[i], "-r")) { // Replay
 			exit_on_return = !keep_on_return;
@@ -169,8 +181,8 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
 	WSACleanup();
 #else
-    
+	
 #endif //_WIN32
-    */
+	*/
 	return EXIT_SUCCESS;
 }
