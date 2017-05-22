@@ -1,79 +1,25 @@
 #include "config.h"
 #include "game.h"
-//#include "image_manager.h"
+#include "image_manager.h"
 #include "data_manager.h"
 #include "deck_manager.h"
 #include "replay.h"
-//#include "materials.h"
-//#include "duelclient.h"
+#include "materials.h"
+#include "duelclient.h"
 #include "netserver.h"
-//#include "single_mode.h"
-
-#ifdef _WIN32
-#define strcasecmp _stricmp
-#include "dirent.h"
-#endif // _WIN32
+#include "single_mode.h"
 
 #ifndef _WIN32
 #include <sys/types.h>
 #include <dirent.h>
-#include <unistd.h>
 #endif
 
-const unsigned short PRO_VERSION = 0x133D;
+const unsigned short PRO_VERSION = 0x2336;
 
 namespace ygo {
 
 Game* mainGame;
 
-unsigned short aServerPort;
-unsigned int lflist;
-unsigned char rule;
-unsigned char mode;
-bool enable_priority;
-bool no_check_deck;
-bool no_shuffle_deck;
-unsigned int start_lp;
-unsigned short time_limit;
-unsigned short replay_mode;
-unsigned char start_hand;
-unsigned char draw_count;
-
-void Game::MainServerLoop(int bDuel_mode, int lflist) {
-	deckManager.LoadLFList();
-    dataManager.LoadDB("cards.cdb");
-	
-	//load expansions
-	DIR * dir;
-	struct dirent * dirp;
-	const char *foldername = "./expansions/";
-	if((dir = opendir(foldername)) != NULL) {
-		while((dirp = readdir(dir)) != NULL) {
-			size_t len = strlen(dirp->d_name);
-			if(len < 5 || strcasecmp(dirp->d_name + len - 4, ".cdb") != 0)
-				continue;
-			char *filepath = (char *)malloc(sizeof(char)*(len + strlen(foldername)));
-			strncpy(filepath, foldername, strlen(foldername)+1);
-			strncat(filepath, dirp->d_name, len);
-			dataManager.LoadDB(filepath);
-			free(filepath);
-		}
-		closedir(dir);
-	}
-	
-    aServerPort = NetServer::StartServer(aServerPort);
-    NetServer::Initduel(bDuel_mode, lflist);
-    printf("%u\n", aServerPort);
-    fflush(stdout);
-	while(NetServer::net_evbase) {
-#ifdef WIN32
-        Sleep(200);
-#else
-	usleep(200000);
-#endif
-    }
-}
-/*
 bool Game::Initialize() {
 	srand(time(0));
 	LoadConfig();
@@ -625,8 +571,6 @@ bool Game::Initialize() {
 	hideChatTimer = 0;
 	return true;
 }
-*/
-/*
 void Game::MainLoop() {
 	wchar_t cap[256];
 	camera = smgr->addCameraSceneNode(0);
@@ -719,8 +663,6 @@ void Game::MainLoop() {
 	SaveConfig();
 //	device->drop();
 }
-*/
-/*
 void Game::BuildProjectionMatrix(irr::core::matrix4& mProjection, f32 left, f32 right, f32 bottom, f32 top, f32 znear, f32 zfar) {
 	for(int i = 0; i < 16; ++i)
 		mProjection[i] = 0;
@@ -1203,14 +1145,12 @@ void Game::CloseDuelWindow() {
 	ClearTextures();
 	closeDoneSignal.Set();
 }
-*/
 int Game::LocalPlayer(int player) {
 	return dInfo.isFirst ? player : 1 - player;
 }
 const wchar_t* Game::LocalName(int local_player) {
 	return local_player == 0 ? dInfo.hostname : dInfo.clientname;
 }
-/*
 void Game::SetWindowsIcon() {
 #ifdef _WIN32
 	HINSTANCE hInstance = (HINSTANCE)GetModuleHandleW(NULL);
@@ -1231,6 +1171,5 @@ void Game::FlashWindow() {
 	FlashWindowEx(&fi);
 #endif
 }
-*/
 
 }
