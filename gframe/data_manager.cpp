@@ -12,7 +12,7 @@ bool DataManager::LoadDB(const char* file) {
 	if(sqlite3_open_v2(file, &pDB, SQLITE_OPEN_READONLY, 0) != SQLITE_OK)
 		return Error(pDB);
 	sqlite3_stmt* pStmt;
-	const char* sql = "select * from datas,texts where datas.id=texts.id";
+	const char* sql = "select * from datas";
 	if(sqlite3_prepare_v2(pDB, sql, -1, &pStmt, 0) != SQLITE_OK)
 		return Error(pDB);
 	CardDataC cd;
@@ -44,6 +44,7 @@ bool DataManager::LoadDB(const char* file) {
 			cd.attribute = sqlite3_column_int(pStmt, 9);
 			cd.category = sqlite3_column_int(pStmt, 10);
 			_datas.insert(std::make_pair(cd.code, cd));
+			/*
 			len = BufferIO::DecodeUTF8((const char*)sqlite3_column_text(pStmt, 12), strBuffer);
 			if(len) {
 				cs.name = new wchar_t[len + 1];
@@ -65,6 +66,7 @@ bool DataManager::LoadDB(const char* file) {
 				} else cs.desc[i - 14] = 0;
 			}
 			_strings.insert(std::make_pair(cd.code, cs));
+			*/
 		}
 	} while(step != SQLITE_DONE);
 	sqlite3_finalize(pStmt);
@@ -290,7 +292,7 @@ const wchar_t* DataManager::FormatSetName(unsigned long long setcode) {
 	for(int i = 0; i < 4; ++i) {
 		const wchar_t* setname = GetSetName((setcode >> i * 16) & 0xffff);
 		if(setname) {
-			BufferIO::CopyWStrRef(setname, p, 32);
+			BufferIO::CopyWStrRef(setname, p, 16);
 			*p = L'|';
 			*++p = 0;
 		}

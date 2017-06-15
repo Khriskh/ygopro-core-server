@@ -178,7 +178,6 @@ public:
 	int32 is_fusion_set_card(uint32 set_code);
 	uint32 get_type();
 	uint32 get_fusion_type();
-	uint32 get_synchro_type();
 	int32 get_base_attack();
 	int32 get_attack();
 	int32 get_base_defense();
@@ -197,9 +196,9 @@ public:
 	uint32 get_link_marker();
 	int32 is_link_marker(uint32 dir);
 	uint32 get_linked_zone();
+	uint32 get_free_linked_zone();
 	void get_linked_cards(card_set* cset);
 	uint32 get_mutual_linked_zone();
-	int32 is_link_state();
 	int32 is_position(int32 pos);
 	void set_status(uint32 status, int32 enabled);
 	int32 get_status(uint32 status);
@@ -251,17 +250,16 @@ public:
 	void filter_single_continuous_effect(int32 code, effect_set* eset, uint8 sort = TRUE);
 	void filter_immune_effect();
 	void filter_disable_related_cards();
-	int32 filter_summon_procedure(uint8 playerid, effect_set* eset, uint8 ignore_count, uint8 min_tribute, uint32 zone);
-	int32 check_summon_procedure(effect* peffect, uint8 playerid, uint8 ignore_count, uint8 min_tribute, uint32 zone);
-	int32 filter_set_procedure(uint8 playerid, effect_set* eset, uint8 ignore_count, uint8 min_tribute, uint32 zone);
-	int32 check_set_procedure(effect* peffect, uint8 playerid, uint8 ignore_count, uint8 min_tribute, uint32 zone);
+	int32 filter_summon_procedure(uint8 playerid, effect_set* eset, uint8 ignore_count, uint8 min_tribute);
+	int32 filter_set_procedure(uint8 playerid, effect_set* eset, uint8 ignore_count, uint8 min_tribute);
 	void filter_spsummon_procedure(uint8 playerid, effect_set* eset, uint32 summon_type);
 	void filter_spsummon_procedure_g(uint8 playerid, effect_set* eset);
 	effect* is_affected_by_effect(int32 code);
 	effect* is_affected_by_effect(int32 code, card* target);
+	int32 get_card_effect(int32 code);
 	effect* check_control_effect();
 	int32 fusion_check(group* fusion_m, card* cg, uint32 chkf);
-	void fusion_select(uint8 playerid, group* fusion_m, card* cg, uint32 chkf);
+	void fusion_filter_valid(group* fusion_m, card* cg, uint32 chkf, effect_set* eset);
 	int32 check_fusion_substitute(card* fcard);
 
 	int32 check_unique_code(card* pcard);
@@ -269,14 +267,14 @@ public:
 	int32 is_summonable_card();
 	int32 is_fusion_summonable_card(uint32 summon_type);
 	int32 is_spsummonable(effect* peffect);
-	int32 is_summonable(effect* peffect, uint8 min_tribute, uint32 zone = 0x1f);
-	int32 is_can_be_summoned(uint8 playerid, uint8 ingore_count, effect* peffect, uint8 min_tribute, uint32 zone = 0x1f);
+	int32 is_summonable(effect* peffect, uint8 min_tribute);
+	int32 is_can_be_summoned(uint8 playerid, uint8 ingore_count, effect* peffect, uint8 min_tribute);
 	int32 get_summon_tribute_count();
 	int32 get_set_tribute_count();
 	int32 is_can_be_flip_summoned(uint8 playerid);
 	int32 is_special_summonable(uint8 playerid, uint32 summon_type);
 	int32 is_can_be_special_summoned(effect* reason_effect, uint32 sumtype, uint8 sumpos, uint8 sumplayer, uint8 toplayer, uint8 nocheck, uint8 nolimit, uint32 zone);
-	int32 is_setable_mzone(uint8 playerid, uint8 ignore_count, effect* peffect, uint8 min_tribute, uint32 zone = 0x1f);
+	int32 is_setable_mzone(uint8 playerid, uint8 ignore_count, effect* peffect, uint8 min_tribute);
 	int32 is_setable_szone(uint8 playerid, uint8 ignore_fd = 0);
 	int32 is_affect_by_effect(effect* peffect);
 	int32 is_destructable();
