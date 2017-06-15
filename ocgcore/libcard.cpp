@@ -161,6 +161,13 @@ int32 scriptlib::card_get_fusion_type(lua_State *L) {
 	lua_pushinteger(L, pcard->get_fusion_type());
 	return 1;
 }
+int32 scriptlib::card_get_synchro_type(lua_State *L) {
+	check_param_count(L, 1);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	lua_pushinteger(L, pcard->get_synchro_type());
+	return 1;
+}
 int32 scriptlib::card_get_level(lua_State *L) {
 	check_param_count(L, 1);
 	check_param(L, PARAM_TYPE_CARD, 1);
@@ -290,11 +297,11 @@ int32 scriptlib::card_get_linked_zone(lua_State *L) {
 	lua_pushinteger(L, pcard->get_linked_zone());
 	return 1;
 }
-int32 scriptlib::card_get_free_linked_zone(lua_State *L) {
+int32 scriptlib::card_is_link_state(lua_State *L) {
 	check_param_count(L, 1);
 	check_param(L, PARAM_TYPE_CARD, 1);
-	card* pcard = *(card**)lua_touserdata(L, 1);
-	lua_pushinteger(L, pcard->get_free_linked_zone());
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	lua_pushboolean(L, pcard->is_link_state());
 	return 1;
 }
 int32 scriptlib::card_get_attribute(lua_State *L) {
@@ -650,6 +657,17 @@ int32 scriptlib::card_is_fusion_type(lua_State *L) {
 		lua_pushboolean(L, 0);
 	return 1;
 }
+int32 scriptlib::card_is_synchro_type(lua_State *L) {
+	check_param_count(L, 2);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	uint32 ttype = lua_tointeger(L, 2);
+	if(pcard->get_synchro_type() & ttype)
+		lua_pushboolean(L, 1);
+	else
+		lua_pushboolean(L, 0);
+	return 1;
+}
 int32 scriptlib::card_is_race(lua_State *L) {
 	check_param_count(L, 2);
 	check_param(L, PARAM_TYPE_CARD, 1);
@@ -694,6 +712,17 @@ int32 scriptlib::card_is_reason(lua_State *L) {
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 treason = lua_tointeger(L, 2);
 	if(pcard->current.reason & treason)
+		lua_pushboolean(L, 1);
+	else
+		lua_pushboolean(L, 0);
+	return 1;
+}
+int32 scriptlib::card_is_summon_type(lua_State *L) {
+	check_param_count(L, 2);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**)lua_touserdata(L, 1);
+	uint32 ttype = lua_tointeger(L, 2);
+	if(((pcard->summon_info & 0xff00ffff) & ttype) == ttype)
 		lua_pushboolean(L, 1);
 	else
 		lua_pushboolean(L, 0);
@@ -1103,23 +1132,11 @@ int32 scriptlib::card_is_has_effect(lua_State *L) {
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 code = lua_tointeger(L, 2);
-	if(pcard && pcard->is_affected_by_effect(code))
-		lua_pushboolean(L, 1);
+	if(pcard)
+		interpreter::effect2value(L, pcard->is_affected_by_effect(code));
 	else
-		lua_pushboolean(L, 0);
-	return 1;
-}
-int32 scriptlib::card_get_card_effect(lua_State *L) {
-	check_param_count(L, 2);
-	check_param(L, PARAM_TYPE_CARD, 1);
-	card* pcard = *(card**)lua_touserdata(L, 1);
-	uint32 code = lua_tointeger(L, 2);
-	int32 count = pcard->get_card_effect(code);
-	if (count == 0) {
 		lua_pushnil(L);
-		return 1;
-	}
-	return count;
+	return 1;
 }
 int32 scriptlib::card_reset_effect(lua_State *L) {
 	check_param_count(L, 3);
@@ -1436,9 +1453,12 @@ int32 scriptlib::card_is_msetable(lua_State *L) {
 		peffect = *(effect**)lua_touserdata(L, 3);
 	}
 	uint32 minc = 0;
-	if(lua_gettop(L) > 3)
+	if(lua_gettop(L) >= 4)
 		minc = lua_tointeger(L, 4);
-	lua_pushboolean(L, pcard->is_setable_mzone(p, ign, peffect, minc));
+	uint32 zone = 0x1f;
+	if(lua_gettop(L) >= 5)
+		zone = lua_tointeger(L, 5);
+	lua_pushboolean(L, pcard->is_setable_mzone(p, ign, peffect, minc, zone));
 	return 1;
 }
 int32 scriptlib::card_is_ssetable(lua_State *L) {
@@ -1520,9 +1540,12 @@ int32 scriptlib::card_is_can_be_summoned(lua_State *L) {
 		peffect = *(effect**)lua_touserdata(L, 3);
 	}
 	uint32 minc = 0;
-	if(lua_gettop(L) > 3)
+	if(lua_gettop(L) >= 4)
 		minc = lua_tointeger(L, 4);
-	lua_pushboolean(L, pcard->is_can_be_summoned(p, ign, peffect, minc));
+	uint32 zone = 0x1f;
+	if(lua_gettop(L) >= 5)
+		zone = lua_tointeger(L, 5);
+	lua_pushboolean(L, pcard->is_can_be_summoned(p, ign, peffect, minc, zone));
 	return 1;
 }
 int32 scriptlib::card_is_can_be_special_summoned(lua_State *L) {
@@ -1847,9 +1870,8 @@ int32 scriptlib::card_is_level_below(lua_State *L) {
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 lvl = lua_tointeger(L, 2);
-	if(((pcard->data.type & TYPE_XYZ) && !(pcard->is_affected_by_effect(EFFECT_RANK_LEVEL) || pcard->is_affected_by_effect(EFFECT_RANK_LEVEL_S))) 
-		|| (pcard->data.type & TYPE_LINK) || (pcard->status & STATUS_NO_LEVEL)
-		|| (!(pcard->data.type & TYPE_MONSTER) && !(pcard->get_type() & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE)))
+	if((pcard->data.type & (TYPE_XYZ | TYPE_LINK)) || (pcard->status & STATUS_NO_LEVEL)
+	        || (!(pcard->data.type & TYPE_MONSTER) && !(pcard->get_type() & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE)))
 		lua_pushboolean(L, 0);
 	else
 		lua_pushboolean(L, pcard->get_level() <= lvl);
@@ -1860,9 +1882,8 @@ int32 scriptlib::card_is_level_above(lua_State *L) {
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 lvl = lua_tointeger(L, 2);
-	if(((pcard->data.type & TYPE_XYZ) && !(pcard->is_affected_by_effect(EFFECT_RANK_LEVEL) || pcard->is_affected_by_effect(EFFECT_RANK_LEVEL_S)))
-		|| (pcard->data.type & TYPE_LINK) || (pcard->status & STATUS_NO_LEVEL)
-		|| (!(pcard->data.type & TYPE_MONSTER) && !(pcard->get_type() & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE)))
+	if((pcard->data.type & (TYPE_XYZ | TYPE_LINK)) || (pcard->status & STATUS_NO_LEVEL)
+	        || (!(pcard->data.type & TYPE_MONSTER) && !(pcard->get_type() & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE)))
 		lua_pushboolean(L, 0);
 	else
 		lua_pushboolean(L, pcard->get_level() >= lvl);
@@ -1873,8 +1894,8 @@ int32 scriptlib::card_is_rank_below(lua_State *L) {
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 rnk = lua_tointeger(L, 2);
-	if(((!(pcard->data.type & TYPE_XYZ) && !(pcard->is_affected_by_effect(EFFECT_LEVEL_RANK) || pcard->is_affected_by_effect(EFFECT_LEVEL_RANK_S))) || (pcard->status & STATUS_NO_LEVEL)
-	        || (!(pcard->data.type & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE))) || (pcard->data.type & TYPE_LINK))
+	if(!(pcard->data.type & TYPE_XYZ) || (pcard->status & STATUS_NO_LEVEL)
+	        || (!(pcard->data.type & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE)))
 		lua_pushboolean(L, 0);
 	else
 		lua_pushboolean(L, pcard->get_rank() <= rnk);
@@ -1885,8 +1906,8 @@ int32 scriptlib::card_is_rank_above(lua_State *L) {
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 rnk = lua_tointeger(L, 2);
-	if(((!(pcard->data.type & TYPE_XYZ) && !(pcard->is_affected_by_effect(EFFECT_LEVEL_RANK) || pcard->is_affected_by_effect(EFFECT_LEVEL_RANK_S))) || (pcard->status & STATUS_NO_LEVEL)
-	        || (!(pcard->data.type & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE))) || (pcard->data.type & TYPE_LINK))
+	if(!(pcard->data.type & TYPE_XYZ) || (pcard->status & STATUS_NO_LEVEL)
+	        || (!(pcard->data.type & TYPE_MONSTER) && !(pcard->current.location & LOCATION_MZONE)))
 		lua_pushboolean(L, 0);
 	else
 		lua_pushboolean(L, pcard->get_rank() >= rnk);

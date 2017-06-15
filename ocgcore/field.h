@@ -160,7 +160,6 @@ struct processor {
 	processor_list subunits;
 	processor_unit reserved;
 	card_vector select_cards;
-	card_vector unselect_cards;
 	card_vector summonable_cards;
 	card_vector spsummonable_cards;
 	card_vector repositionable_cards;
@@ -326,7 +325,7 @@ public:
 	player_info player[2];
 	card* temp_card;
 	field_info infos;
-	lpcost cost[2];
+	//lpcost cost[2];
 	field_effect effects;
 	processor core;
 	return_value returns;
@@ -352,6 +351,7 @@ public:
 	int32 get_mzone_limit(uint8 playerid, uint8 uplayer, uint32 reason);
 	int32 get_szone_limit(uint8 playerid, uint8 uplayer, uint32 reason);
 	uint32 get_linked_zone(int32 playerid);
+	void get_linked_cards(uint8 self, uint8 s, uint8 o, card_set* cset);
 	int32 check_extra_link(int32 playerid);
 	int32 check_extra_link(int32 playerid, card* pcard, int32 sequence);
 	void get_cards_in_zone(card_set* cset, uint32 zone, int32 playerid);
@@ -376,7 +376,6 @@ public:
 	int32 filter_matching_card(int32 findex, uint8 self, uint32 location1, uint32 location2, group* pgroup, card* pexception, group* pexgroup, uint32 extraargs, card** pret = 0, int32 fcount = 0, int32 is_target = FALSE);
 	int32 filter_field_card(uint8 self, uint32 location, uint32 location2, group* pgroup);
 	effect* is_player_affected_by_effect(uint8 playerid, uint32 code);
-	int32 get_player_effect(uint8 playerid, uint32 code);
 
 	int32 get_release_list(uint8 playerid, card_set* release_list, card_set* ex_list, int32 use_con, int32 use_hand, int32 fun, int32 exarg, card* exc, group* exg);
 	int32 check_release_list(uint8 playerid, int32 count, int32 use_con, int32 use_hand, int32 fun, int32 exarg, card* exc, group* exg);
@@ -403,8 +402,8 @@ public:
 	int32 check_spsummon_counter(uint8 playerid, uint8 ct = 1);
 
 	int32 check_lp_cost(uint8 playerid, uint32 cost);
-	void save_lp_cost();
-	void restore_lp_cost();
+	void save_lp_cost() {}
+	void restore_lp_cost() {}
 	int32 pay_lp_cost(uint32 step, uint8 playerid, uint32 cost);
 
 	uint32 get_field_counter(uint8 self, uint8 s, uint8 o, uint16 countertype);
@@ -415,7 +414,7 @@ public:
 	int32 check_synchro_material(card* pcard, int32 findex1, int32 findex2, int32 min, int32 max, card* smat, group* mg);
 	int32 check_tuner_material(card* pcard, card* tuner, int32 findex1, int32 findex2, int32 min, int32 max, card* smat, group* mg);
 	int32 check_other_synchro_material(const card_vector& nsyn, int32 lv, int32 min, int32 max, int32 mcount);
-	int32 check_tribute(card* pcard, int32 min, int32 max, group* mg, uint8 toplayer);
+	int32 check_tribute(card* pcard, int32 min, int32 max, group* mg, uint8 toplayer, uint32 zone = 0x1f);
 	static int32 check_with_sum_limit(const card_vector& mats, int32 acc, int32 index, int32 count, int32 min, int32 max);
 	static int32 check_with_sum_limit_m(const card_vector& mats, int32 acc, int32 index, int32 min, int32 max, int32 must_count);
 	static int32 check_with_sum_greater_limit(const card_vector& mats, int32 acc, int32 index, int32 opmin);
@@ -500,7 +499,8 @@ public:
 	void draw(effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid, uint32 count);
 	void damage(effect* reason_effect, uint32 reason, uint32 reason_player, card* reason_card, uint32 playerid, uint32 amount, uint32 is_step = FALSE);
 	void recover(effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid, uint32 amount, uint32 is_step = FALSE);
-	void summon(uint32 sumplayer, card* target, effect* proc, uint32 ignore_count, uint32 min_tribute);
+	void summon(uint32 sumplayer, card* target, effect* proc, uint32 ignore_count, uint32 min_tribute, uint32 zone = 0x1f);
+	void mset(uint32 setplayer, card* target, effect* proc, uint32 ignore_count, uint32 min_tribute, uint32 zone = 0x1f);
 	void special_summon_rule(uint32 sumplayer, card* target, uint32 summon_type);
 	void special_summon(card_set* target, uint32 sumtype, uint32 sumplayer, uint32 playerid, uint32 nocheck, uint32 nolimit, uint32 positions, uint32 zone);
 	void special_summon_step(card* target, uint32 sumtype, uint32 sumplayer, uint32 playerid, uint32 nocheck, uint32 nolimit, uint32 positions, uint32 zone);
@@ -525,9 +525,9 @@ public:
 	int32 draw(uint16 step, effect* reason_effect, uint32 reason, uint8 reason_player, uint8 playerid, uint32 count);
 	int32 damage(uint16 step, effect* reason_effect, uint32 reason, uint8 reason_player, card* reason_card, uint8 playerid, uint32 amount, uint32 is_step);
 	int32 recover(uint16 step, effect* reason_effect, uint32 reason, uint8 reason_player, uint8 playerid, uint32 amount, uint32 is_step);
-	int32 summon(uint16 step, uint8 sumplayer, card* target, effect* proc, uint8 ignore_count, uint8 min_tribute);
+	int32 summon(uint16 step, uint8 sumplayer, card* target, effect* proc, uint8 ignore_count, uint8 min_tribute, uint32 zone);
 	int32 flip_summon(uint16 step, uint8 sumplayer, card* target);
-	int32 mset(uint16 step, uint8 setplayer, card* ptarget, effect* proc, uint8 ignore_count, uint8 min_tribute);
+	int32 mset(uint16 step, uint8 setplayer, card* ptarget, effect* proc, uint8 ignore_count, uint8 min_tribute, uint32 zone);
 	int32 sset(uint16 step, uint8 setplayer, uint8 toplayer, card* ptarget);
 	int32 sset_g(uint16 step, uint8 setplayer, uint8 toplayer, group* ptarget);
 	int32 special_summon_rule(uint16 step, uint8 sumplayer, card* target, uint32 summon_type);
@@ -540,13 +540,13 @@ public:
 	int32 send_to(uint16 step, group* targets, card* target);
 	int32 send_to(uint16 step, group* targets, effect* reason_effect, uint32 reason, uint8 reason_player);
 	int32 discard_deck(uint16 step, uint8 playerid, uint8 count, uint32 reason);
-	int32 move_to_field(uint16 step, card* target, uint32 enable, uint32 ret, uint32 is_equip, uint32 zone, uint32 pzone = false);
+	int32 move_to_field(uint16 step, card* target, uint32 enable, uint32 ret, uint32 is_equip, uint32 zone);
 	int32 change_position(uint16 step, group* targets, effect* reason_effect, uint8 reason_player, uint32 enable);
 	int32 operation_replace(uint16 step, effect* replace_effect, group* targets, card* arg, ptr replace_type);
 	int32 select_synchro_material(int16 step, uint8 playerid, card* pcard, int32 min, int32 max, card* smat, group* mg);
 	int32 select_xyz_material(int16 step, uint8 playerid, uint32 lv, card* pcard, int32 min, int32 max);
 	int32 select_release_cards(int16 step, uint8 playerid, uint8 check_field, uint8 cancelable, int32 min, int32 max);
-	int32 select_tribute_cards(int16 step, uint8 playerid, uint8 cancelable, int32 min, int32 max);
+	int32 select_tribute_cards(int16 step, uint8 playerid, uint8 cancelable, int32 min, int32 max, uint32 zone);
 	int32 toss_coin(uint16 step, effect* reason_effect, uint8 reason_player, uint8 playerid, uint8 count);
 	int32 toss_dice(uint16 step, effect* reason_effect, uint8 reason_player, uint8 playerid, uint8 count1, uint8 count2);
 	int32 rock_paper_scissors(uint16 step, uint8 repeat);
@@ -557,7 +557,6 @@ public:
 	int32 select_yes_no(uint16 step, uint8 playerid, uint32 description);
 	int32 select_option(uint16 step, uint8 playerid);
 	int32 select_card(uint16 step, uint8 playerid, uint8 cancelable, uint8 min, uint8 max);
-	int32 select_unselect_card(uint16 step, uint8 playerid, uint8 cancelable, uint8 min, uint8 max, uint8 buttonok);
 	int32 select_chain(uint16 step, uint8 playerid, uint8 spe_count, uint8 forced);
 	int32 select_place(uint16 step, uint8 playerid, uint32 flag, uint8 count);
 	int32 select_position(uint16 step, uint8 playerid, uint32 code, uint8 positions);
@@ -745,10 +744,6 @@ public:
 #define PROCESSOR_REMOVEOL_S		160
 #define PROCESSOR_MOVETOFIELD_S		161
 
-
-#define PROCESSOR_SELECT_UNSELECT_CARD	180
-#define PROCESSOR_SELECT_UNSELECT_CARD_S	181
-
 //Hints
 #define HINT_EVENT				1
 #define HINT_MESSAGE			2
@@ -881,7 +876,4 @@ public:
 #define MSG_PLAYER_HINT			165
 #define MSG_MATCH_KILL			170
 #define MSG_CUSTOM_MSG			180
-
-
-#define MSG_SELECT_UNSELECT_CARD	190
 #endif /* FIELD_H_ */
