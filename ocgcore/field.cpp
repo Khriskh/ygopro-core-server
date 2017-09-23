@@ -29,6 +29,7 @@ void chain::set_triggering_place(card* pcard) {
 	else
 		triggering_location = pcard->current.location;
 	triggering_sequence = pcard->current.sequence;
+	triggering_position = pcard->current.position;
 }
 bool tevent::operator< (const tevent& v) const {
 	return memcmp(this, &v, sizeof(tevent)) < 0;
@@ -164,7 +165,7 @@ void field::add_card(uint8 playerid, card* pcard, uint8 location, uint8 sequence
 		return;
 	if((pcard->data.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK)) && (location & (LOCATION_HAND | LOCATION_DECK))) {
 		location = LOCATION_EXTRA;
-		pcard->operation_param = (pcard->operation_param & 0x00ffffff) | (POS_FACEDOWN_DEFENSE << 24);
+		pcard->sendto_param.position = POS_FACEDOWN_DEFENSE;
 	}
 	pcard->current.controler = playerid;
 	pcard->current.location = location;
@@ -192,14 +193,14 @@ void field::add_card(uint8 playerid, card* pcard, uint8 location, uint8 sequence
 			if(!core.shuffle_check_disabled)
 				core.shuffle_deck_check[playerid] = TRUE;
 		}
-		pcard->operation_param = (pcard->operation_param & 0x00ffffff) | (POS_FACEDOWN << 24);
+		pcard->sendto_param.position = POS_FACEDOWN;
 		break;
 	}
 	case LOCATION_HAND: {
 		player[playerid].list_hand.push_back(pcard);
 		pcard->current.sequence = player[playerid].list_hand.size() - 1;
 		uint32 pos = pcard->is_affected_by_effect(EFFECT_PUBLIC) ? POS_FACEUP : POS_FACEDOWN;
-		pcard->operation_param = (pcard->operation_param & 0x00ffffff) | (pos << 24);
+		pcard->sendto_param.position = pos;
 		if(!(pcard->current.reason & REASON_DRAW) && !core.shuffle_check_disabled)
 			core.shuffle_hand_check[playerid] = TRUE;
 		break;
@@ -217,7 +218,7 @@ void field::add_card(uint8 playerid, card* pcard, uint8 location, uint8 sequence
 	case LOCATION_EXTRA: {
 		player[playerid].list_extra.push_back(pcard);
 		pcard->current.sequence = player[playerid].list_extra.size() - 1;
-		if((pcard->data.type & TYPE_PENDULUM) && ((pcard->operation_param >> 24) & POS_FACEUP))
+		if((pcard->data.type & TYPE_PENDULUM) && (pcard->sendto_param.position & POS_FACEUP))
 			++player[playerid].extra_p_count;
 		break;
 	}
@@ -299,7 +300,7 @@ void field::move_card(uint8 playerid, card* pcard, uint8 location, uint8 sequenc
 	uint8 presequence = pcard->current.sequence;
 	if((pcard->data.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK)) && (location & (LOCATION_HAND | LOCATION_DECK))) {
 		location = LOCATION_EXTRA;
-		pcard->operation_param = (pcard->operation_param & 0x00ffffff) | (POS_FACEDOWN_DEFENSE << 24);
+		pcard->sendto_param.position = POS_FACEDOWN_DEFENSE;
 	}
 	if (pcard->current.location) {
 		if (pcard->current.location == location) {
@@ -364,7 +365,8 @@ void field::move_card(uint8 playerid, card* pcard, uint8 location, uint8 sequenc
 				if(preplayer == playerid) {
 					pduel->write_buffer32(pcard->get_info_location());
 					pduel->write_buffer32(pcard->current.reason);
-				}
+				} else
+					pcard->fieldid = infos.field_id++;
 				return;
 			} else if(location == LOCATION_HAND) {
 				if(preplayer == playerid)
@@ -411,12 +413,26 @@ void field::move_card(uint8 playerid, card* pcard, uint8 location, uint8 sequenc
 			        && (((pcard->current.location == LOCATION_MZONE) && !pcard->is_status(STATUS_SUMMON_DISABLED))
 			        || ((pcard->current.location == LOCATION_SZONE) && !pcard->is_status(STATUS_ACTIVATE_DISABLED)))) {
 				location = LOCATION_EXTRA;
-				pcard->operation_param = (pcard->operation_param & 0x00ffffff) | (POS_FACEUP_DEFENSE << 24);
+				pcard->sendto_param.position = POS_FACEUP_DEFENSE;
 			}
 			remove_card(pcard);
 		}
 	}
 	add_card(playerid, pcard, location, sequence, pzone);
+}
+void field::swap_card(card* pcard1, card* pcard2) {
+	uint8 p1 = pcard1->current.controler, p2 = pcard2->current.controler;
+	uint8 l1 = pcard1->current.location, l2 = pcard2->current.location;
+	uint8 s1 = pcard1->current.sequence, s2 = pcard2->current.sequence;
+	remove_card(pcard1);
+	remove_card(pcard2);
+	add_card(p2, pcard1, l2, s2);
+	add_card(p1, pcard2, l1, s1);
+	pduel->write_buffer8(MSG_SWAP);
+	pduel->write_buffer32(pcard1->data.code);
+	pduel->write_buffer32(pcard2->get_info_location());
+	pduel->write_buffer32(pcard2->data.code);
+	pduel->write_buffer32(pcard1->get_info_location());
 }
 // add EFFECT_SET_CONTROL
 void field::set_control(card* pcard, uint8 playerid, uint16 reset_phase, uint8 reset_count) {
@@ -437,7 +453,7 @@ void field::set_control(card* pcard, uint8 playerid, uint16 reset_phase, uint8 r
 		peffect->reset_flag |= RESET_PHASE | reset_phase;
 		if(!(peffect->reset_flag & (RESET_SELF_TURN | RESET_OPPO_TURN)))
 			peffect->reset_flag |= (RESET_SELF_TURN | RESET_OPPO_TURN);
-		peffect->reset_count |= reset_count & 0xff;
+		peffect->reset_count = reset_count;
 	}
 	pcard->add_effect(peffect);
 	pcard->current.controler = playerid;
@@ -1573,12 +1589,12 @@ int32 field::check_release_list(uint8 playerid, int32 count, int32 use_con, int3
 	return FALSE;
 }
 // return: the max release count of mg or all monsters on field
-int32 field::get_summon_release_list(card* target, card_set* release_list, card_set* ex_list, card_set* ex_list_sum, group* mg, uint32 ex) {
+int32 field::get_summon_release_list(card* target, card_set* release_list, card_set* ex_list, card_set* ex_list_sum, group* mg, uint32 ex, uint32 releasable) {
 	uint8 p = target->current.controler;
 	uint32 rcount = 0;
 	for(auto cit = player[p].list_mzone.begin(); cit != player[p].list_mzone.end(); ++cit) {
 		card* pcard = *cit;
-		if(pcard && pcard->is_releasable_by_summon(p, target)) {
+		if(pcard && ((releasable >> pcard->current.sequence) & 1) && pcard->is_releasable_by_summon(p, target)) {
 			if(mg && !mg->has_card(pcard))
 				continue;
 			if(release_list)
@@ -1593,7 +1609,7 @@ int32 field::get_summon_release_list(card* target, card_set* release_list, card_
 	uint32 ex_sum_max = 0;
 	for(auto cit = player[1 - p].list_mzone.begin(); cit != player[1 - p].list_mzone.end(); ++cit) {
 		card* pcard = *cit;
-		if(!pcard || !pcard->is_releasable_by_summon(p, target))
+		if(!pcard || !((releasable >> (pcard->current.sequence + 16)) & 1) || !pcard->is_releasable_by_summon(p, target))
 			continue;
 		if(mg && !mg->has_card(pcard))
 			continue;
@@ -1607,7 +1623,7 @@ int32 field::get_summon_release_list(card* target, card_set* release_list, card_
 			rcount += pcard->release_param;
 		} else {
 			effect* peffect = pcard->is_affected_by_effect(EFFECT_EXTRA_RELEASE_SUM);
-			if(!peffect || (peffect->is_flag(EFFECT_FLAG_COUNT_LIMIT) && (peffect->reset_count & 0xf00) == 0))
+			if(!peffect || (peffect->is_flag(EFFECT_FLAG_COUNT_LIMIT) && peffect->count_limit == 0))
 				continue;
 			if(ex_list_sum)
 				ex_list_sum->insert(pcard);
@@ -1799,47 +1815,33 @@ void field::adjust_disable_check_list() {
 void field::adjust_self_destroy_set() {
 	if(core.selfdes_disabled || !core.unique_destroy_set.empty() || !core.self_destroy_set.empty() || !core.self_tograve_set.empty())
 		return;
-	core.unique_destroy_set.clear();
-	card_set cset;
 	int32 p = infos.turn_player;
 	for(int32 p1 = 0; p1 < 2; ++p1) {
+		std::vector<card*> uniq_set;
 		for(auto iter = core.unique_cards[p].begin(); iter != core.unique_cards[p].end(); ++iter) {
 			card* ucard = *iter;
 			if(ucard->is_position(POS_FACEUP) && ucard->get_status(STATUS_EFFECT_ENABLED)
 					&& !ucard->get_status(STATUS_DISABLED | STATUS_FORBIDDEN)) {
+				card_set cset;
 				ucard->get_unique_target(&cset, p);
 				if(cset.size() == 0)
 					ucard->unique_fieldid = 0;
 				else if(cset.size() == 1) {
 					auto cit = cset.begin();
 					ucard->unique_fieldid = (*cit)->fieldid;
-				} else {
-					card* mcard = 0;
-					for(auto cit = cset.begin(); cit != cset.end(); ++cit) {
-						card* pcard = *cit;
-						if(ucard->unique_fieldid == pcard->fieldid) {
-							mcard = pcard;
-							break;
-						}
-						if(!mcard || pcard->fieldid < mcard->fieldid)
-							mcard = pcard;
-					}
-					ucard->unique_fieldid = mcard->fieldid;
-					cset.erase(mcard);
-					for(auto cit = cset.begin(); cit != cset.end(); ++cit) {
-						card* pcard = *cit;
-						core.unique_destroy_set.insert(pcard);
-						pcard->temp.reason_effect = pcard->current.reason_effect;
-						pcard->temp.reason_player = pcard->current.reason_player;
-						pcard->current.reason_effect = ucard->unique_effect;
-						pcard->current.reason_player = ucard->current.controler;
-					}
-				}
+				} else
+					uniq_set.push_back(ucard);
 			}
+		}
+		std::sort(uniq_set.begin(), uniq_set.end(), [](card* lhs, card* rhs) { return lhs->fieldid < rhs->fieldid; });
+		for(auto iter = uniq_set.begin(); iter != uniq_set.end(); ++iter) {
+			card* pcard = *iter;
+			add_process(PROCESSOR_SELF_DESTROY, 0, 0, 0, p, 0, 0, 0, pcard);
+			core.unique_destroy_set.insert(pcard);
 		}
 		p = 1 - p;
 	}
-	cset.clear();
+	card_set cset;
 	for(uint8 p = 0; p < 2; ++p) {
 		for(auto cit = player[p].list_mzone.begin(); cit != player[p].list_mzone.end(); ++cit) {
 			card* pcard = *cit;
@@ -1852,17 +1854,11 @@ void field::adjust_self_destroy_set() {
 				cset.insert(pcard);
 		}
 	}
-	core.self_destroy_set.clear();
-	core.self_tograve_set.clear();
 	for(auto cit = cset.begin(); cit != cset.end(); ++cit) {
 		card* pcard = *cit;
 		effect* peffect = pcard->is_affected_by_effect(EFFECT_SELF_DESTROY);
 		if(peffect) {
 			core.self_destroy_set.insert(pcard);
-			pcard->temp.reason_effect = pcard->current.reason_effect;
-			pcard->temp.reason_player = pcard->current.reason_player;
-			pcard->current.reason_effect = peffect;
-			pcard->current.reason_player = peffect->get_handler_player();
 		}
 	}
 	if(core.global_flag & GLOBALFLAG_SELF_TOGRAVE) {
@@ -1871,15 +1867,13 @@ void field::adjust_self_destroy_set() {
 			effect* peffect = pcard->is_affected_by_effect(EFFECT_SELF_TOGRAVE);
 			if(peffect) {
 				core.self_tograve_set.insert(pcard);
-				pcard->temp.reason_effect = pcard->current.reason_effect;
-				pcard->temp.reason_player = pcard->current.reason_player;
-				pcard->current.reason_effect = peffect;
-				pcard->current.reason_player = peffect->get_handler_player();
 			}
 		}
 	}
-	if(!core.unique_destroy_set.empty() || !core.self_destroy_set.empty() || !core.self_tograve_set.empty())
-		add_process(PROCESSOR_SELF_DESTROY, 0, 0, 0, 0, 0);
+	if(!core.self_destroy_set.empty())
+		add_process(PROCESSOR_SELF_DESTROY, 10, 0, 0, 0, 0);
+	if(!core.self_tograve_set.empty())
+		add_process(PROCESSOR_SELF_DESTROY, 20, 0, 0, 0, 0);
 }
 void field::add_unique_card(card* pcard) {
 	uint8 con = pcard->current.controler;
@@ -1900,10 +1894,10 @@ void field::remove_unique_card(card* pcard) {
 		core.unique_cards[1 - con].erase(pcard);
 }
 // return: pcard->unique_effect or 0
-effect* field::check_unique_onfield(card* pcard, uint8 controler, uint8 location) {
+effect* field::check_unique_onfield(card* pcard, uint8 controler, uint8 location, card* icard) {
 	for(auto iter = core.unique_cards[controler].begin(); iter != core.unique_cards[controler].end(); ++iter) {
 		card* ucard = *iter;
-		if((ucard != pcard) && ucard->is_position(POS_FACEUP) && ucard->get_status(STATUS_EFFECT_ENABLED)
+		if((ucard != pcard) && (ucard != icard) && ucard->is_position(POS_FACEUP) && ucard->get_status(STATUS_EFFECT_ENABLED)
 			&& !ucard->get_status(STATUS_DISABLED | STATUS_FORBIDDEN)
 			&& ucard->unique_fieldid && ucard->check_unique_code(pcard) && (ucard->unique_location & location))
 			return ucard->unique_effect;
@@ -1911,7 +1905,7 @@ effect* field::check_unique_onfield(card* pcard, uint8 controler, uint8 location
 	if(!pcard->unique_code || !(pcard->unique_location & location) || pcard->get_status(STATUS_DISABLED | STATUS_FORBIDDEN))
 		return 0;
 	card_set cset;
-	pcard->get_unique_target(&cset, controler);
+	pcard->get_unique_target(&cset, controler, icard);
 	if(pcard->check_unique_code(pcard))
 		cset.insert(pcard);
 	if(cset.size() >= 2)
@@ -2115,12 +2109,11 @@ int32 field::get_attack_target(card* pcard, card_vector* v, uint8 chain_attack) 
 		std::set<uint32> idset;
 		for(int32 i = 0; i < eset.size(); ++i)
 			idset.insert(eset[i]->label);
-		if(idset.size()==1 && only_be_attack.size() == 1 && only_be_attack.front()->fieldid_r == *idset.begin())
+		if(idset.size() == 1 && only_be_attack.size() == 1 && only_be_attack.front()->fieldid_r == *idset.begin())
 			pv = &only_be_attack;
 		else
 			return atype;
-	}
-	else if(pcard->is_affected_by_effect(EFFECT_ONLY_ATTACK_MONSTER)) {
+	} else if(pcard->is_affected_by_effect(EFFECT_ONLY_ATTACK_MONSTER)) {
 		atype = 2;
 		if(only_be_attack.size() == 1)
 			pv = &only_be_attack;
@@ -2638,12 +2631,12 @@ int32 field::check_other_synchro_material(const card_vector& nsyn, int32 lv, int
 	}
 	return FALSE;
 }
-int32 field::check_tribute(card* pcard, int32 min, int32 max, group* mg, uint8 toplayer, uint32 zone) {
+int32 field::check_tribute(card* pcard, int32 min, int32 max, group* mg, uint8 toplayer, uint32 zone, uint32 releasable) {
 	int32 ex = FALSE;
 	if(toplayer == 1 - pcard->current.controler)
 		ex = TRUE;
 	card_set release_list, ex_list;
-	int32 m = get_summon_release_list(pcard, &release_list, &ex_list, 0, mg, ex);
+	int32 m = get_summon_release_list(pcard, &release_list, &ex_list, 0, mg, ex, releasable);
 	if(max > m)
 		max = m;
 	if(min > max)

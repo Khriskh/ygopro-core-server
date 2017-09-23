@@ -55,6 +55,7 @@ public:
 	static int32 card_is_link_state(lua_State *L);
 	static int32 card_get_column_group(lua_State *L);
 	static int32 card_get_column_group_count(lua_State *L);
+	static int32 card_get_column_zone(lua_State *L);
 	static int32 card_is_all_column(lua_State *L);
 	static int32 card_get_attribute(lua_State *L);
 	static int32 card_get_origin_attribute(lua_State *L);
@@ -210,6 +211,8 @@ public:
 	static int32 card_is_level_above(lua_State *L);
 	static int32 card_is_rank_below(lua_State *L);
 	static int32 card_is_rank_above(lua_State *L);
+	static int32 card_is_link_below(lua_State *L);
+	static int32 card_is_link_above(lua_State *L);
 	static int32 card_is_attack_below(lua_State *L);
 	static int32 card_is_attack_above(lua_State *L);
 	static int32 card_is_defense_below(lua_State *L);
