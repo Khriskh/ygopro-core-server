@@ -61,16 +61,16 @@ int ReplayMode::ReplayThread(void* param) {
 	int seed = rh.seed;
 	rnd.reset(seed);
 	if(rh.flag & REPLAY_TAG) {
-		cur_replay.ReadName(mainGame->dInfo.hostname);
-		cur_replay.ReadName(mainGame->dInfo.hostname_tag);
-		cur_replay.ReadName(mainGame->dInfo.clientname_tag);
-		cur_replay.ReadName(mainGame->dInfo.clientname);
+		cur_replay.ReadData(mainGame->dInfo.hostname, 40);
+		cur_replay.ReadData(mainGame->dInfo.hostname_tag, 40);
+		cur_replay.ReadData(mainGame->dInfo.clientname_tag, 40);
+		cur_replay.ReadData(mainGame->dInfo.clientname, 40);
 		mainGame->dInfo.isTag = true;
 		mainGame->dInfo.tag_player[0] = false;
 		mainGame->dInfo.tag_player[1] = false;
 	} else {
-		cur_replay.ReadName(mainGame->dInfo.hostname);
-		cur_replay.ReadName(mainGame->dInfo.clientname);
+		cur_replay.ReadData(mainGame->dInfo.hostname, 40);
+		cur_replay.ReadData(mainGame->dInfo.clientname, 40);
 	}
 	set_script_reader(default_script_reader);
 	set_card_reader((card_reader)DataManager::CardReader);
@@ -205,16 +205,16 @@ void ReplayMode::Restart(bool refresh) {
 	int seed = rh.seed;
 	rnd.reset(seed);
 	if(rh.flag & REPLAY_TAG) {
-		cur_replay.ReadName(mainGame->dInfo.hostname);
-		cur_replay.ReadName(mainGame->dInfo.hostname_tag);
-		cur_replay.ReadName(mainGame->dInfo.clientname_tag);
-		cur_replay.ReadName(mainGame->dInfo.clientname);
+		cur_replay.ReadData(mainGame->dInfo.hostname, 40);
+		cur_replay.ReadData(mainGame->dInfo.hostname_tag, 40);
+		cur_replay.ReadData(mainGame->dInfo.clientname_tag, 40);
+		cur_replay.ReadData(mainGame->dInfo.clientname, 40);
 		mainGame->dInfo.isTag = true;
 		mainGame->dInfo.tag_player[0] = false;
 		mainGame->dInfo.tag_player[1] = false;
 	} else {
-		cur_replay.ReadName(mainGame->dInfo.hostname);
-		cur_replay.ReadName(mainGame->dInfo.clientname);
+		cur_replay.ReadData(mainGame->dInfo.hostname, 40);
+		cur_replay.ReadData(mainGame->dInfo.clientname, 40);
 	}
 	//set_card_reader((card_reader)DataManager::CardReader);
 	//set_message_handler((message_handler)MessageHandler);
@@ -391,6 +391,15 @@ bool ReplayMode::ReplayAnalyze(char* msg, unsigned int len) {
 		case MSG_SELECT_TRIBUTE: {
 			player = BufferIO::ReadInt8(pbuf);
 			pbuf += 3;
+			count = BufferIO::ReadInt8(pbuf);
+			pbuf += count * 8;
+			return ReadReplayResponse();
+		}
+		case MSG_SELECT_UNSELECT_CARD: {
+			player = BufferIO::ReadInt8(pbuf);
+			pbuf += 4;
+			count = BufferIO::ReadInt8(pbuf);
+			pbuf += count * 8;
 			count = BufferIO::ReadInt8(pbuf);
 			pbuf += count * 8;
 			return ReadReplayResponse();
