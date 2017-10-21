@@ -2470,6 +2470,8 @@ int32 card::is_can_add_counter(uint8 playerid, uint16 countertype, uint16 count,
 	effect_set eset;
 	if(!pduel->game_field->is_player_can_place_counter(playerid, this, countertype, count))
 		return FALSE;
+	if(!loc && (!(current.location & LOCATION_ONFIELD) || !is_position(POS_FACEUP)))
+		return FALSE;
 	if((countertype & COUNTER_NEED_ENABLE) && is_status(STATUS_DISABLED))
 		return FALSE;
 	uint32 check = countertype & COUNTER_WITHOUT_PERMIT;
@@ -2770,7 +2772,7 @@ int32 card::filter_set_procedure(uint8 playerid, effect_set* peset, uint8 ignore
 	}
 	if(!pduel->game_field->is_player_can_mset(SUMMON_TYPE_NORMAL, playerid, this))
 		return FALSE;
-	int32 rcount = get_summon_tribute_count();
+	int32 rcount = get_set_tribute_count();
 	int32 min = rcount & 0xffff;
 	int32 max = (rcount >> 16) & 0xffff;
 	if(!pduel->game_field->is_player_can_mset(SUMMON_TYPE_ADVANCE, playerid, this))
@@ -3022,7 +3024,7 @@ effect* card::check_control_effect() {
 	}
 	return ret_effect;
 }
-int32 card::fusion_check(group* fusion_m, card* cg, uint32 chkf) {
+int32 card::fusion_check(group* fusion_m, group* cg, uint32 chkf) {
 	effect* peffect = 0;
 	auto ecit = single_effect.find(EFFECT_FUSION_MATERIAL);
 	for (; ecit != single_effect.end(); ++ecit) {
@@ -3031,7 +3033,7 @@ int32 card::fusion_check(group* fusion_m, card* cg, uint32 chkf) {
 			continue;
 		pduel->lua->add_param(peffect, PARAM_TYPE_EFFECT);
 		pduel->lua->add_param(fusion_m, PARAM_TYPE_GROUP);
-		pduel->lua->add_param(cg, PARAM_TYPE_CARD);
+		pduel->lua->add_param(cg, PARAM_TYPE_GROUP);
 		pduel->lua->add_param(chkf, PARAM_TYPE_INT);
 		effect* oreason = pduel->game_field->core.reason_effect;
 		uint8 op = pduel->game_field->core.reason_player;
@@ -3045,7 +3047,7 @@ int32 card::fusion_check(group* fusion_m, card* cg, uint32 chkf) {
 	}
 	return FALSE;
 }
-void card::fusion_filter_valid(group* fusion_m, card* cg, uint32 chkf, effect_set* eset) {
+void card::fusion_filter_valid(group* fusion_m, group* cg, uint32 chkf, effect_set* eset) {
 	effect* peffect = 0;
 	auto ecit = single_effect.find(EFFECT_FUSION_MATERIAL);
 	for (; ecit != single_effect.end(); ++ecit) {
@@ -3054,7 +3056,7 @@ void card::fusion_filter_valid(group* fusion_m, card* cg, uint32 chkf, effect_se
 			continue;
 		pduel->lua->add_param(peffect, PARAM_TYPE_EFFECT);
 		pduel->lua->add_param(fusion_m, PARAM_TYPE_GROUP);
-		pduel->lua->add_param(cg, PARAM_TYPE_CARD);
+		pduel->lua->add_param(cg, PARAM_TYPE_GROUP);
 		pduel->lua->add_param(chkf, PARAM_TYPE_INT);
 		effect* oreason = pduel->game_field->core.reason_effect;
 		uint8 op = pduel->game_field->core.reason_player;
@@ -3368,7 +3370,7 @@ int32 card::is_special_summonable(uint8 playerid, uint32 summon_type) {
 	pduel->game_field->restore_lp_cost();
 	return eset.size();
 }
-int32 card::is_can_be_special_summoned(effect* reason_effect, uint32 sumtype, uint8 sumpos, uint8 sumplayer, uint8 toplayer, uint8 nocheck, uint8 nolimit, uint32 zone, uint8 nozoneusedcheck) {
+int32 card::is_can_be_special_summoned(effect* reason_effect, uint32 sumtype, uint8 sumpos, uint8 sumplayer, uint8 toplayer, uint8 nocheck, uint8 nolimit, uint32 zone) {
 	if(current.location == LOCATION_MZONE)
 		return FALSE;
 	if(current.location == LOCATION_REMOVED && (current.position & POS_FACEDOWN))
@@ -3392,7 +3394,7 @@ int32 card::is_can_be_special_summoned(effect* reason_effect, uint32 sumtype, ui
 	if(is_status(STATUS_FORBIDDEN))
 		return FALSE;
 	if(zone != 0xff) {
-		if(pduel->game_field->get_useable_count(this, toplayer, LOCATION_MZONE, sumplayer, LOCATION_REASON_TOFIELD, zone, 0, nozoneusedcheck) <= 0)
+		if(pduel->game_field->get_useable_count(this, toplayer, LOCATION_MZONE, sumplayer, LOCATION_REASON_TOFIELD, zone, 0) <= 0)
 			return FALSE;
 	}
 	pduel->game_field->save_lp_cost();
@@ -3667,6 +3669,8 @@ int32 card::is_capable_cost_to_grave(uint8 playerid) {
 	if(current.location == LOCATION_GRAVE)
 		return FALSE;
 	if(is_affected_by_effect(EFFECT_CANNOT_USE_AS_COST))
+		return FALSE;
+	if(is_affected_by_effect(EFFECT_CANNOT_TO_GRAVE_AS_COST))
 		return FALSE;
 	if(!is_capable_send_to_grave(playerid))
 		return FALSE;

@@ -91,6 +91,8 @@ struct field_effect {
 	typedef std::unordered_map<effect*, effect_container::iterator> effect_indexer;
 	typedef std::unordered_map<effect*, effect*> oath_effects;
 	typedef std::unordered_set<effect*> effect_collection;
+	typedef std::unordered_map<card*, effect*> gain_effects;
+	typedef std::unordered_map<effect*, gain_effects> grant_effect_container;
 
 	effect_container aura_effect;
 	effect_container ignition_effect;
@@ -109,6 +111,8 @@ struct field_effect {
 
 	std::list<card*> disable_check_list;
 	std::unordered_set<card*> disable_check_set;
+
+	grant_effect_container grant_effect;
 };
 struct field_info {
 	int32 field_id;
@@ -240,7 +244,7 @@ struct processor {
 	ptr temp_var[4];
 	uint32 global_flag;
 	uint16 pre_field[2];
-	uint16 opp_mzone[7];
+	std::set<uint16> opp_mzone;
 	chain_limit_list chain_limit;
 	chain_limit_list chain_limit_p;
 	uint8 chain_solving;
@@ -350,13 +354,13 @@ public:
 	void swap_card(card* pcard1, card* pcard2);
 	void set_control(card* pcard, uint8 playerid, uint16 reset_phase, uint8 reset_count);
 	card* get_field_card(uint32 playerid, uint32 location, uint32 sequence);
-	int32 is_location_useable(uint32 playerid, uint32 location, uint32 sequence, uint8 neglect_used = 0);
-	int32 get_useable_count(card* pcard, uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone = 0xff, uint32* list = 0, uint8 neglect_used = 0);
+	int32 is_location_useable(uint32 playerid, uint32 location, uint32 sequence);
+	int32 get_useable_count(card* pcard, uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone = 0xff, uint32* list = 0);
 	int32 get_spsummonable_count(card* pcard, uint8 playerid, uint32 zone = 0xff, uint32* list = 0);
-	int32 get_useable_count(uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone = 0xff, uint32* list = 0, uint8 neglect_used = 0);
-	int32 get_tofield_count(uint8 playerid, uint8 location, uint32 zone = 0xff, uint32* list = 0, uint8 neglect_used = 0);
+	int32 get_useable_count(uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone = 0xff, uint32* list = 0);
+	int32 get_tofield_count(uint8 playerid, uint8 location, uint32 zone = 0xff, uint32* list = 0, uint32 reason = 0x1, uint32 uplayer = 2);
 	int32 get_useable_count_fromex(card* pcard, uint8 playerid, uint8 uplayer, uint32 zone = 0xff, uint32* list = 0);
-	int32 get_spsummonable_count_fromex(card* pcard, uint8 playerid, uint32 zone = 0xff, uint32* list = 0);
+	int32 get_spsummonable_count_fromex(card* pcard, uint8 playerid, uint8 uplayer, uint32 zone = 0xff, uint32* list = 0);
 	int32 get_mzone_limit(uint8 playerid, uint8 uplayer, uint32 reason);
 	int32 get_szone_limit(uint8 playerid, uint8 uplayer, uint32 reason);
 	uint32 get_linked_zone(int32 playerid);
@@ -402,6 +406,8 @@ public:
 	void add_to_disable_check_list(card* pcard);
 	void adjust_disable_check_list();
 	void adjust_self_destroy_set();
+	void erase_grant_effect(effect* peffect);
+	int32 adjust_grant_effect();
 	void add_unique_card(card* pcard);
 	void remove_unique_card(card* pcard);
 	effect* check_unique_onfield(card* pcard, uint8 controler, uint8 location, card* icard = 0);
@@ -520,8 +526,8 @@ public:
 	void destroy(card* target, effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid = 2, uint32 destination = 0, uint32 sequence = 0);
 	void release(card_set* targets, effect* reason_effect, uint32 reason, uint32 reason_player);
 	void release(card* target, effect* reason_effect, uint32 reason, uint32 reason_player);
-	void send_to(card_set* targets, effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid, uint32 destination, uint32 sequence, uint32 position);
-	void send_to(card* target, effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid, uint32 destination, uint32 sequence, uint32 position);
+	void send_to(card_set* targets, effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid, uint32 destination, uint32 sequence, uint32 position, uint32 ignore = false);
+	void send_to(card* target, effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid, uint32 destination, uint32 sequence, uint32 position, uint32 ignore = false);
 	void move_to_field(card* target, uint32 move_player, uint32 playerid, uint32 destination, uint32 positions, uint32 enable = FALSE, uint32 ret = 0, uint32 is_equip = FALSE, uint32 zone = 0xff, uint32 rule = FALSE);
 	void change_position(card_set* targets, effect* reason_effect, uint32 reason_player, uint32 au, uint32 ad, uint32 du, uint32 dd, uint32 flag, uint32 enable = FALSE);
 	void change_position(card* target, effect* reason_effect, uint32 reason_player, uint32 npos, uint32 flag, uint32 enable = FALSE);
@@ -559,7 +565,7 @@ public:
 	int32 select_synchro_material(int16 step, uint8 playerid, card* pcard, int32 min, int32 max, card* smat, group* mg);
 	int32 select_xyz_material(int16 step, uint8 playerid, uint32 lv, card* pcard, int32 min, int32 max);
 	int32 select_release_cards(int16 step, uint8 playerid, uint8 check_field, uint8 cancelable, int32 min, int32 max);
-	int32 select_tribute_cards(int16 step, uint8 playerid, uint8 cancelable, int32 min, int32 max, uint32 zone);
+	int32 select_tribute_cards(int16 step, uint8 playerid, uint8 cancelable, int32 min, int32 max, uint8 toplayer, uint32 zone);
 	int32 toss_coin(uint16 step, effect* reason_effect, uint8 reason_player, uint8 playerid, uint8 count);
 	int32 toss_dice(uint16 step, effect* reason_effect, uint8 reason_player, uint8 playerid, uint8 count1, uint8 count2);
 	int32 rock_paper_scissors(uint16 step, uint8 repeat);
@@ -587,6 +593,7 @@ public:
 //Location Use Reason
 #define LOCATION_REASON_TOFIELD	0x1
 #define LOCATION_REASON_CONTROL	0x2
+#define LOCATION_REASON_COUNT	0x4
 //Chain Info
 #define CHAIN_DISABLE_ACTIVATE	0x01
 #define CHAIN_DISABLE_EFFECT	0x02

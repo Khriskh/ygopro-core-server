@@ -68,8 +68,7 @@ field::field(duel* pduel) {
 	}
 	core.pre_field[0] = 0;
 	core.pre_field[1] = 0;
-	for (int32 i = 0; i < 7; ++i)
-		core.opp_mzone[i] = 0;
+	core.opp_mzone.clear();
 	core.summoning_card = 0;
 	core.summon_depth = 0;
 	core.summon_cancelable = FALSE;
@@ -532,13 +531,13 @@ card* field::get_field_card(uint32 playerid, uint32 location, uint32 sequence) {
 	return 0;
 }
 // return: the given slot in LOCATION_MZONE or all LOCATION_SZONE is available or not
-int32 field::is_location_useable(uint32 playerid, uint32 location, uint32 sequence, uint8 neglect_used) {
-	uint32 flag = player[playerid].disabled_location | (neglect_used ? 0 : player[playerid].used_location);
+int32 field::is_location_useable(uint32 playerid, uint32 location, uint32 sequence) {
+	uint32 flag = player[playerid].disabled_location | player[playerid].used_location;
 	if (location == LOCATION_MZONE) {
 		if(flag & (0x1u << sequence))
 			return FALSE;
 		if(sequence >= 5) {
-			uint32 oppo = player[1 - playerid].disabled_location | (neglect_used ? 0 : player[1 - playerid].used_location);
+			uint32 oppo = player[1 - playerid].disabled_location | player[1 - playerid].used_location;
 			if(oppo & (0x1u << (11 - sequence)))
 				return FALSE;
 		}
@@ -562,33 +561,50 @@ int32 field::is_location_useable(uint32 playerid, uint32 location, uint32 sequen
 // uplayer: request player, PLAYER_NONE means ignoring EFFECT_MAX_MZONE, EFFECT_MAX_SZONE
 // list: store local flag in list
 // return: usable count of LOCATION_MZONE or real LOCATION_SZONE of playerid requested by uplayer (may be negative)
-int32 field::get_useable_count(card* pcard, uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone, uint32* list, uint8 neglect_used) {
+int32 field::get_useable_count(card* pcard, uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone, uint32* list) {
 	if(core.duel_rule >= 4 && location == LOCATION_MZONE && pcard->current.location == LOCATION_EXTRA)
 		return get_useable_count_fromex(pcard, playerid, uplayer, zone, list);
 	else
-		return get_useable_count(playerid, location, uplayer, reason, zone, list, neglect_used);
+		return get_useable_count(playerid, location, uplayer, reason, zone, list);
 }
 int32 field::get_spsummonable_count(card* pcard, uint8 playerid, uint32 zone, uint32* list) {
 	if(core.duel_rule >= 4 && pcard->current.location == LOCATION_EXTRA)
-		return get_spsummonable_count_fromex(pcard, playerid, zone, list);
+		return get_spsummonable_count_fromex(pcard, playerid, playerid, zone, list);
 	else
 		return get_tofield_count(playerid, LOCATION_MZONE, zone, list);
 }
-int32 field::get_useable_count(uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone, uint32* list, uint8 neglect_used) {
-	int32 count = get_tofield_count(playerid, location, zone, list, neglect_used);
+int32 field::get_useable_count(uint8 playerid, uint8 location, uint8 uplayer, uint32 reason, uint32 zone, uint32* list) {
+	int32 count = get_tofield_count(playerid, location, zone, list, reason, uplayer);
 	int32 limit;
 	if(location == LOCATION_MZONE)
-		limit = get_mzone_limit(playerid, uplayer, LOCATION_REASON_TOFIELD);
+		limit = get_mzone_limit(playerid, uplayer, reason);
 	else
-		limit = get_szone_limit(playerid, uplayer, LOCATION_REASON_TOFIELD);
+		limit = get_szone_limit(playerid, uplayer, reason);
 	if(count > limit)
 		count = limit;
 	return count;
 }
-int32 field::get_tofield_count(uint8 playerid, uint8 location, uint32 zone, uint32* list, uint8 neglect_used) {
+int32 field::get_tofield_count(uint8 playerid, uint8 location, uint32 zone, uint32* list, uint32 reason, uint32 uplayer) {
 	if (location != LOCATION_MZONE && location != LOCATION_SZONE)
 		return 0;
-	uint32 flag = player[playerid].disabled_location | (neglect_used ? 0 : player[playerid].used_location);
+	uint32 flag = player[playerid].disabled_location | player[playerid].used_location;
+	effect_set eset;
+	uint32 value;
+	if(uplayer == 2)
+		uplayer = playerid;
+	if((reason & (LOCATION_REASON_TOFIELD | LOCATION_REASON_CONTROL) != 0) && location == LOCATION_MZONE)
+		filter_player_effect(uplayer, EFFECT_FORCE_MZONE, &eset);
+	for(int32 i = 0; i < eset.size(); ++i) {
+		value = eset[i]->get_value();
+		uint32 flag1 = ~(value) & 0xff7f;
+		uint32 flag2 = ~(value >> 16) & 0xff7f;
+		if ((flag1 & flag) != flag1 && (uplayer == playerid)) {
+			flag |= flag1;
+		} else if ((flag2 & flag) != flag2 && (uplayer != playerid)) {
+			flag |= flag2;
+		}
+	}
+	eset.clear();
 	if (location == LOCATION_MZONE)
 		flag = (flag | ~zone) & 0x1f;
 	else
@@ -601,14 +617,28 @@ int32 field::get_tofield_count(uint8 playerid, uint8 location, uint32 zone, uint
 	return count;
 }
 int32 field::get_useable_count_fromex(card* pcard, uint8 playerid, uint8 uplayer, uint32 zone, uint32* list) {
-	int32 count = get_spsummonable_count_fromex(pcard, playerid, zone, list);
+	int32 count = get_spsummonable_count_fromex(pcard, playerid, uplayer, zone, list);
 	int32 limit = get_mzone_limit(playerid, uplayer, LOCATION_REASON_TOFIELD);
 	if(count > limit)
 		count = limit;
 	return count;
 }
-int32 field::get_spsummonable_count_fromex(card* pcard, uint8 playerid, uint32 zone, uint32* list) {
+int32 field::get_spsummonable_count_fromex(card* pcard, uint8 playerid, uint8 uplayer, uint32 zone, uint32* list) {
 	uint32 flag = player[playerid].disabled_location | player[playerid].used_location;
+	effect_set eset;
+	uint32 value;
+	filter_player_effect(uplayer, EFFECT_FORCE_MZONE, &eset);
+	for(int32 i = 0; i < eset.size(); ++i) {
+		value = eset[i]->get_value();
+		uint32 flag1 = ~(value) & 0xff7f;
+		uint32 flag2 = ~(value >> 16) & 0xff7f;
+		if ((flag1 & flag) != flag1 && (uplayer == playerid)) {
+			flag |= flag1;
+		} else if ((flag2 & flag) != flag2 && (uplayer != playerid)) {
+			flag |= flag2;
+		}
+	}
+	eset.clear();
 	uint32 linked_zone = get_linked_zone(playerid) | (1u << 5) | (1u << 6);
 	flag = flag | ~zone | ~linked_zone;
 	if(player[playerid].list_mzone[5] && is_location_useable(playerid, LOCATION_MZONE, 6)
@@ -1021,6 +1051,8 @@ void field::add_effect(effect* peffect, uint8 owner_player) {
 		it = effects.aura_effect.insert(std::make_pair(peffect->code, peffect));
 		if(peffect->code == EFFECT_SPSUMMON_COUNT_LIMIT)
 			effects.spsummon_count_eff.insert(peffect);
+		if(peffect->type & EFFECT_TYPE_GRANT)
+			effects.grant_effect.insert(std::make_pair(peffect, field_effect::gain_effects()));
 	} else {
 		if (peffect->type & EFFECT_TYPE_IGNITION)
 			it = effects.ignition_effect.insert(std::make_pair(peffect->code, peffect));
@@ -1079,6 +1111,8 @@ void field::remove_effect(effect* peffect) {
 		effects.aura_effect.erase(it);
 		if(peffect->code == EFFECT_SPSUMMON_COUNT_LIMIT)
 			effects.spsummon_count_eff.erase(peffect);
+		if(peffect->type & EFFECT_TYPE_GRANT)
+			erase_grant_effect(peffect);
 	} else {
 		if (peffect->type & EFFECT_TYPE_IGNITION)
 			effects.ignition_effect.erase(it);
@@ -1902,6 +1936,52 @@ void field::adjust_self_destroy_set() {
 	if(!core.self_tograve_set.empty())
 		add_process(PROCESSOR_SELF_DESTROY, 20, 0, 0, 0, 0);
 }
+void field::erase_grant_effect(effect* peffect) {
+	auto eit = effects.grant_effect.find(peffect);
+	for(auto it = eit->second.begin(); it != eit->second.end(); ++it)
+		it->first->remove_effect(it->second);
+	effects.grant_effect.erase(eit);
+}
+int32 field::adjust_grant_effect() {
+	int32 adjusted = FALSE;
+	for(auto eit = effects.grant_effect.begin(); eit != effects.grant_effect.end(); ++eit) {
+		effect* peffect = eit->first;
+		if(!peffect->label_object)
+			continue;
+		card_set cset;
+		if(peffect->is_available())
+			filter_affected_cards(peffect, &cset);
+		card_set add_set;
+		for(auto cit = cset.begin(); cit != cset.end(); ++cit) {
+			card* pcard = *cit;
+			if(pcard->is_affect_by_effect(peffect) && !eit->second.count(pcard))
+				add_set.insert(pcard);
+		}
+		card_set remove_set;
+		for(auto cit = eit->second.begin(); cit != eit->second.end(); ++cit) {
+			card* pcard = cit->first;
+			if(!pcard->is_affect_by_effect(peffect) || !cset.count(pcard))
+				remove_set.insert(pcard);
+		}
+		for(auto cit = add_set.begin(); cit != add_set.end(); ++cit) {
+			card* pcard = *cit;
+			effect* geffect = (effect*)peffect->label_object;
+			effect* ceffect = geffect->clone();
+			ceffect->owner = pcard;
+			pcard->add_effect(ceffect);
+			eit->second.insert(std::make_pair(pcard, ceffect));
+		}
+		for(auto cit = remove_set.begin(); cit != remove_set.end(); ++cit) {
+			card* pcard = *cit;
+			auto it = eit->second.find(pcard);
+			pcard->remove_effect(it->second);
+			eit->second.erase(it);
+		}
+		if(!add_set.empty() || !remove_set.empty())
+			adjusted = TRUE;
+	}
+	return adjusted;
+}
 void field::add_unique_card(card* pcard) {
 	uint8 con = pcard->current.controler;
 	if(pcard->unique_pos[0])
@@ -1910,7 +1990,6 @@ void field::add_unique_card(card* pcard) {
 		core.unique_cards[1 - con].insert(pcard);
 	pcard->unique_fieldid = 0;
 }
-
 void field::remove_unique_card(card* pcard) {
 	uint8 con = pcard->current.controler;
 	if(con == PLAYER_NONE)
@@ -1939,7 +2018,6 @@ effect* field::check_unique_onfield(card* pcard, uint8 controler, uint8 location
 		return pcard->unique_effect;
 	return 0;
 }
-
 int32 field::check_spsummon_once(card* pcard, uint8 playerid) {
 	if(pcard->spsummon_code == 0)
 		return TRUE;

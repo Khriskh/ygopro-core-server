@@ -204,7 +204,7 @@ int32 field::process() {
 		return pduel->bufferlen;
 	}
 	case PROCESSOR_SELECT_TRIBUTE: {
-		if (select_tribute_cards(it->step, it->arg1 & 0xff, (it->arg1 >> 16) & 0xff, (it->arg2) & 0xff, (it->arg2 >> 16) & 0xff, it->arg3))
+		if (select_tribute_cards(it->step, it->arg1 & 0xff, (it->arg1 >> 16) & 0xff, (it->arg2) & 0xff, (it->arg2 >> 16) & 0xff, it->arg3, it->arg4))
 			core.units.pop_front();
 		else
 			it->step++;
@@ -744,7 +744,7 @@ int32 field::process() {
 	}
 	case PROCESSOR_SELECT_TRIBUTE_S: {
 		if(it->step == 0) {
-			add_process(PROCESSOR_SELECT_TRIBUTE, 0, it->peffect, it->ptarget, it->arg1, it->arg2, it->arg3);
+			add_process(PROCESSOR_SELECT_TRIBUTE, 0, it->peffect, it->ptarget, it->arg1, it->arg2, it->arg3, it->arg4);
 			it->step++;
 		} else {
 			group* pgroup = pduel->new_group();
@@ -807,7 +807,7 @@ int32 field::process() {
 		if(it->step == 0) {
 			effect_set eset;
 			card* pcard = (card*)it->ptr2;
-			pcard->fusion_filter_valid(it->ptarget, (card*)it->ptr1, it->arg1>>16, &eset);
+			pcard->fusion_filter_valid(it->ptarget, (group*)it->ptr1, it->arg1>>16, &eset);
 			core.select_effects.clear();
 			core.select_options.clear();
 			if(eset.size() < 1) {
@@ -834,14 +834,12 @@ int32 field::process() {
 				return pduel->bufferlen;
 			}
 			core.sub_solving_event.push_back(e);
-			pduel->lua->add_param(it->ptr1, PARAM_TYPE_CARD);
+			pduel->lua->add_param(it->ptr1, PARAM_TYPE_GROUP);
 			pduel->lua->add_param(it->arg1 >> 16, PARAM_TYPE_INT);
 			add_process(PROCESSOR_EXECUTE_OPERATION, 0, core.select_effects[returns.ivalue[0]], 0, it->arg1 & 0xffff, 0);
 			it->step++;
 		} else {
 			group* pgroup = pduel->new_group(core.fusion_materials);
-			if(it->ptr1)
-				pgroup->container.insert((card*)it->ptr1);
 			pduel->lua->add_param(pgroup, PARAM_TYPE_GROUP);
 			core.units.pop_front();
 		}
@@ -3118,12 +3116,11 @@ int32 field::process_battle_command(uint16 step) {
 		} else
 			pduel->write_buffer32(0);
 		core.attack_rollback = FALSE;
+		core.opp_mzone.clear();
 		for(uint32 i = 0; i < player[1 - infos.turn_player].list_mzone.size(); ++i) {
 			card* pcard = player[1 - infos.turn_player].list_mzone[i];
 			if(pcard)
-				core.opp_mzone[i] = pcard->fieldid_r;
-			else
-				core.opp_mzone[i] = 0;
+				core.opp_mzone.insert(pcard->fieldid_r);
 		}
 		//core.units.begin()->arg1 ---> is rollbacked
 		if(!core.units.begin()->arg1) {
@@ -4318,7 +4315,7 @@ int32 field::add_chain(uint16 step) {
 			if(phandler->current.location == LOCATION_HAND) {
 				if(phandler->data.type & TYPE_TRAP)
 					ecode = EFFECT_TRAP_ACT_IN_HAND;
-				else if((phandler->data.type & TYPE_SPELL) && (phandler->data.type & TYPE_QUICKPLAY)
+				else if((phandler->data.type & TYPE_SPELL) && (phandler->data.type & TYPE_QUICKPLAY || phandler->is_affected_by_effect(EFFECT_BECOME_QUICK))
 				        && infos.turn_player != phandler->current.controler)
 					ecode = EFFECT_QP_ACT_IN_NTPHAND;
 			} else if(phandler->current.location == LOCATION_SZONE) {
@@ -4344,17 +4341,25 @@ int32 field::add_chain(uint16 step) {
 					}
 				}
 			}
-			if(phandler->current.location == LOCATION_HAND) {
-				phandler->enable_field_effect(false);
-				phandler->set_status(STATUS_ACT_FROM_HAND, TRUE);
-				if (phandler->data.type & TYPE_PENDULUM) {
-					move_to_field(phandler, phandler->current.controler, phandler->current.controler, LOCATION_PZONE, POS_FACEUP);
-				} else {
-					move_to_field(phandler, phandler->current.controler, phandler->current.controler, LOCATION_SZONE, POS_FACEUP);
-				}
-			} else {
+			if(phandler->current.location == LOCATION_SZONE) {
 				phandler->set_status(STATUS_ACT_FROM_HAND, FALSE);
 				change_position(phandler, 0, phandler->current.controler, POS_FACEUP, 0);
+			} else {
+				int32 loc = 0;
+				if(phandler->current.location == LOCATION_HAND) {
+					phandler->set_status(STATUS_ACT_FROM_HAND, TRUE);
+					if (phandler->data.type & TYPE_PENDULUM) {
+						loc=LOCATION_PZONE;
+					} else {
+						loc=LOCATION_SZONE;
+					}
+				}
+				if (peffect->value)
+					loc = peffect->value;
+				if (loc>0) {
+					phandler->enable_field_effect(false);
+					move_to_field(phandler, phandler->current.controler, phandler->current.controler, loc, POS_FACEUP);
+				}
 			}
 		}
 		if(phandler->current.location & 0x30)
@@ -5262,7 +5267,12 @@ int32 field::adjust_step(uint16 step) {
 				add_process(PROCESSOR_CONTROL_ADJUST, 0, 0, 0, 0, 0);
 			}
 		}
-		core.units.begin()->step = 8;
+		core.units.begin()->step = 7;
+		return FALSE;
+	}
+	case 8: {
+		if(adjust_grant_effect())
+			core.re_adjust = TRUE;
 		return FALSE;
 	}
 	case 9: {
@@ -5398,20 +5408,14 @@ int32 field::adjust_step(uint16 step) {
 			attacker->set_status(STATUS_ATTACK_CANCELED, TRUE);
 		if(core.attack_rollback)
 			return FALSE;
+		std::set<uint16> fidset;
 		for(uint32 i = 0; i < player[1 - infos.turn_player].list_mzone.size(); ++i) {
 			card* pcard = player[1 - infos.turn_player].list_mzone[i];
-			if(pcard) {
-				if(!core.opp_mzone[i] || core.opp_mzone[i] != pcard->fieldid_r) {
-					core.attack_rollback = TRUE;
-					break;
-				}
-			} else {
-				if(core.opp_mzone[i]) {
-					core.attack_rollback = TRUE;
-					break;
-				}
-			}
+			if(pcard)
+				fidset.insert(pcard->fieldid_r);
 		}
+		if(fidset != core.opp_mzone)
+			core.attack_rollback = TRUE;
 		return FALSE;
 	}
 	case 15: {
