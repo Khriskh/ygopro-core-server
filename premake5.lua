@@ -2,18 +2,13 @@ solution "ygo"
     location "build"
     language "C++"
     objdir "obj"
-
-    USE_IRRKLANG = true
-    IRRKLANG_PRO = true
+    		startproject "ygopro"
 
     configurations { "Debug", "Release" }
+    		defines { "LUA_COMPAT_5_2" }
 
     configuration "windows"
         defines { "WIN32", "_WIN32", "WINVER=0x0501" }
-        libdirs { "$(DXSDK_DIR)Lib/x86" }
-        entrypoint "mainCRTStartup"
-        toolset "v140_xp"
-        startproject "ygopro"
 
     configuration "bsd"
         defines { "LUA_USE_POSIX" }
@@ -22,7 +17,7 @@ solution "ygo"
 
     configuration "macosx"
         defines { "LUA_USE_MACOSX" }
-        includedirs { "/usr/local/include", "/usr/local/include/*" }
+        includedirs { "/usr/local/include/*" }
         libdirs { "/usr/local/lib", "/usr/X11/lib" }
         buildoptions { "-stdlib=libc++" }
         links { "OpenGL.framework", "Cocoa.framework", "IOKit.framework" }
@@ -31,7 +26,7 @@ solution "ygo"
         defines { "LUA_USE_LINUX" }
 
     configuration "Release"
-        optimize "Speed"
+        flags { "OptimizeSpeed" }
         targetdir "bin/release"
 
     configuration "Debug"
@@ -50,10 +45,9 @@ solution "ygo"
 
     configuration { "Debug", "vs*" }
         defines { "_ITERATOR_DEBUG_LEVEL=0" }
-        disablewarnings { "4819" }
 
     configuration "vs*"
-        vectorextensions "SSE2"
+        flags "EnableSSE2"
         defines { "_CRT_SECURE_NO_WARNINGS" }
     
     configuration "not vs*"
@@ -62,15 +56,14 @@ solution "ygo"
     configuration {"not vs*", "windows"}
         buildoptions { "-static-libgcc" }
 
+    startproject "ygopro"
+
     include "ocgcore"
     include "gframe"
-    if os.ishost("windows") then
+    if os.is("windows") then
     include "event"
     include "freetype"
     include "irrlicht"
     include "lua"
     include "sqlite3"
-    if IRRKLANG_PRO then
-    include "ikpmp3"
-    end
     end
