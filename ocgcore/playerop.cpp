@@ -28,7 +28,10 @@ int32 field::select_battle_command(uint16 step, uint8 playerid) {
 		for(i = 0; i < core.select_chains.size(); ++i) {
 			peffect = core.select_chains[i].triggering_effect;
 			pcard = peffect->get_handler();
-			pduel->write_buffer32(pcard->data.code);
+			if(!peffect->is_flag(EFFECT_FLAG_FIELD_ONLY))
+				pduel->write_buffer32(pcard->data.code);
+			else
+				pduel->write_buffer32(pcard->data.code | 0x80000000);
 			pduel->write_buffer8(pcard->current.controler);
 			pduel->write_buffer8(pcard->current.location);
 			pduel->write_buffer8(pcard->current.sequence);
@@ -126,7 +129,10 @@ int32 field::select_idle_command(uint16 step, uint8 playerid) {
 		for(i = 0; i < core.select_chains.size(); ++i) {
 			peffect = core.select_chains[i].triggering_effect;
 			pcard = peffect->get_handler();
-			pduel->write_buffer32(pcard->data.code);
+			if(!peffect->is_flag(EFFECT_FLAG_FIELD_ONLY))
+				pduel->write_buffer32(pcard->data.code);
+			else
+				pduel->write_buffer32(pcard->data.code | 0x80000000);
 			pduel->write_buffer8(pcard->current.controler);
 			pduel->write_buffer8(pcard->current.location);
 			pduel->write_buffer8(pcard->current.sequence);
@@ -281,56 +287,6 @@ int32 field::select_card(uint16 step, uint8 playerid, uint8 cancelable, uint8 mi
 		return TRUE;
 	}
 }
-int32 field::select_unselect_card(uint16 step, uint8 playerid, uint8 cancelable, uint8 min, uint8 max, uint8 buttonok) {
-	if (step == 0) {
-		returns.bvalue[0] = 0;
-		if (core.select_cards.empty() && core.unselect_cards.empty())
-			return TRUE;
-		if ((playerid == 1) && (core.duel_options & DUEL_SIMPLE_AI)) {
-			returns.bvalue[0] = 1;
-			for (uint8 i = 0; i < 1; ++i)
-				returns.bvalue[i + 1] = i;
-			return TRUE;
-		}
-		pduel->write_buffer8(MSG_SELECT_UNSELECT_CARD);
-		pduel->write_buffer8(playerid);
-		pduel->write_buffer8(buttonok);
-		pduel->write_buffer8(cancelable);
-		pduel->write_buffer8(min);
-		pduel->write_buffer8(max);
-		pduel->write_buffer8(core.select_cards.size());
-		card* pcard;
-		std::sort(core.select_cards.begin(), core.select_cards.end(), card::card_operation_sort);
-		for (uint32 i = 0; i < core.select_cards.size(); ++i) {
-			pcard = core.select_cards[i];
-			pduel->write_buffer32(pcard->data.code);
-			pduel->write_buffer32(pcard->get_info_location());
-		}
-		pduel->write_buffer8(core.unselect_cards.size());
-		for (uint32 i = 0; i < core.unselect_cards.size(); ++i) {
-			pcard = core.unselect_cards[i];
-			pduel->write_buffer32(pcard->data.code);
-			pduel->write_buffer32(pcard->get_info_location());
-		}
-		return FALSE;
-	}
-	else {
-		if (returns.ivalue[0] == -1)
-			return TRUE;
-		byte c[64];
-		memset(c, 0, 64);
-		uint8 m = core.select_cards.size() + core.unselect_cards.size(), v = 0;
-		for (int32 i = 0; i < returns.bvalue[0]; ++i) {
-			v = returns.bvalue[i + 1];
-			if (v < 0 || v >= m || v >= 63 || c[v]) {
-				pduel->write_buffer8(MSG_RETRY);
-				return FALSE;
-			}
-			c[v] = 1;
-		}
-		return TRUE;
-	}
-}
 int32 field::select_chain(uint16 step, uint8 playerid, uint8 spe_count, uint8 forced) {
 	if(step == 0) {
 		returns.ivalue[0] = -1;
@@ -372,7 +328,9 @@ int32 field::select_chain(uint16 step, uint8 playerid, uint8 spe_count, uint8 fo
 		}
 		return FALSE;
 	} else {
-		if((returns.ivalue[0] < 0 && forced) || returns.ivalue[0] >= (int32)core.select_chains.size()) {
+		if(!forced && returns.ivalue[0] == -1)
+			return TRUE;
+		if(returns.ivalue[0] < 0 || returns.ivalue[0] >= (int32)core.select_chains.size()) {
 			pduel->write_buffer8(MSG_RETRY);
 			return FALSE;
 		}
@@ -484,7 +442,7 @@ int32 field::select_position(uint16 step, uint8 playerid, uint32 code, uint8 pos
 		return FALSE;
 	} else {
 		uint32 pos = returns.ivalue[0];
-		if(pos != 0x1 && pos != 0x2 && pos != 0x4 && pos != 0x8 && !(pos & positions)) {
+		if(pos != 0x1 && pos != 0x2 && pos != 0x4 && pos != 0x8 || !(pos & positions)) {
 			pduel->write_buffer8(MSG_RETRY);
 			return FALSE;
 		}
@@ -728,7 +686,7 @@ int32 field::sort_card(int16 step, uint8 playerid, uint8 is_chain) {
 	if(step == 0) {
 		returns.bvalue[0] = 0;
 		if((playerid == 1) && (core.duel_options & DUEL_SIMPLE_AI)) {
-			returns.ivalue[0] = -1;
+			returns.bvalue[0] = -1;
 			return TRUE;
 		}
 		if(core.select_cards.empty())

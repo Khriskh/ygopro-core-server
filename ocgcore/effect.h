@@ -69,12 +69,13 @@ public:
 	int32 is_can_be_forbidden();
 	int32 is_available();
 	int32 check_count_limit(uint8 playerid);
-	int32 is_activateable(uint8 playerid, const tevent& e, int32 neglect_cond = FALSE, int32 neglect_cost = FALSE, int32 neglect_target = FALSE, int32 neglect_loc = FALSE);
+	int32 is_activateable(uint8 playerid, const tevent& e, int32 neglect_cond = FALSE, int32 neglect_cost = FALSE, int32 neglect_target = FALSE, int32 neglect_loc = FALSE, int32 neglect_faceup = FALSE);
 	int32 is_action_check(uint8 playerid);
 	int32 is_activate_ready(uint8 playerid, const tevent& e, int32 neglect_cond = FALSE, int32 neglect_cost = FALSE, int32 neglect_target = FALSE);
 	int32 is_condition_check(uint8 playerid, const tevent& e);
 	int32 is_activate_check(uint8 playerid, const tevent& e, int32 neglect_cond = FALSE, int32 neglect_cost = FALSE, int32 neglect_target = FALSE);
 	int32 is_target(card* pcard);
+	int32 is_fit_target_function(card* pcard);
 	int32 is_target_player(uint8 playerid);
 	int32 is_player_effect_target(card* pcard);
 	int32 is_immuned(card* pcard);
@@ -90,7 +91,7 @@ public:
 	void get_value(effect* peffect, uint32 extraargs, std::vector<int32>* result);
 	int32 check_value_condition(uint32 extraargs = 0);
 	int32 get_speed();
-	effect* clone(int32 majestic = FALSE);
+	effect* clone();
 	card* get_owner() const;
 	uint8 get_owner_player();
 	card* get_handler() const;
@@ -190,7 +191,6 @@ enum effect_flag : uint32 {
 enum effect_flag2 : uint32 {
 	EFFECT_FLAG2_NAGA				= 0x0001,
 	EFFECT_FLAG2_COF				= 0x0002,
-	EFFECT_FLAG2_MAJESTIC_MUST_COPY = 0x80000000,
 };
 inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 {
@@ -325,7 +325,8 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_EXTRA_RELEASE			153
 #define EFFECT_TRIBUTE_LIMIT			154
 #define EFFECT_EXTRA_RELEASE_SUM		155
-#define EFFECT_TRIPLE_TRIBUTE			156
+//#define EFFECT_TRIPLE_TRIBUTE			156
+#define EFFECT_ADD_EXTRA_TRIBUTE		157
 #define EFFECT_PUBLIC					160
 #define EFFECT_COUNTER_PERMIT			0x10000
 #define EFFECT_COUNTER_LIMIT			0x20000
@@ -382,8 +383,7 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_USE_EXTRA_SZONE			262
 #define EFFECT_MAX_MZONE				263
 #define EFFECT_MAX_SZONE				264
-#define EFFECT_FORCE_MZONE				265
-#define EFFECT_BECOME_LINKED_ZONE		266
+#define EFFECT_MUST_USE_MZONE			265
 #define EFFECT_HAND_LIMIT				270
 #define EFFECT_DRAW_COUNT				271
 #define EFFECT_SPIRIT_DONOT_RETURN		280
@@ -403,6 +403,9 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_TO_GRAVE_REDIRECT_CB		313
 #define EFFECT_CHANGE_LEVEL_FINAL		314
 #define EFFECT_CHANGE_RANK_FINAL		315
+#define EFFECT_MUST_BE_FMATERIAL		316
+#define EFFECT_MUST_BE_XMATERIAL		317
+#define EFFECT_MUST_BE_LMATERIAL		318
 #define EFFECT_SPSUMMON_PROC_G			320
 #define EFFECT_SPSUMMON_COUNT_LIMIT		330
 #define EFFECT_LEFT_SPSUMMON_COUNT		331
@@ -428,25 +431,6 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_CHANGE_FUSION_ATTRIBUTE	351
 #define EFFECT_EXTRA_FUSION_MATERIAL	352
 #define EFFECT_TUNER_MATERIAL_LIMIT		353
-
-#define EFFECT_CANNOT_LOSE_DECK			400
-#define EFFECT_CANNOT_LOSE_LP			401
-#define EFFECT_CANNOT_LOSE_EFFECT		402
-#define EFFECT_BP_FIRST_TURN			403
-#define EFFECT_UNSTOPPABLE_ATTACK		404
-#define EFFECT_ALLOW_NEGATIVE			405
-#define EFFECT_SELF_ATTACK				406
-#define EFFECT_BECOME_QUICK				407
-#define EFFECT_LEVEL_RANK				408
-#define EFFECT_RANK_LEVEL				409
-#define EFFECT_LEVEL_RANK_S				410
-#define EFFECT_RANK_LEVEL_S				411
-#define EFFECT_UPDATE_LINK              420
-#define EFFECT_CHANGE_LINK              421 
-#define EFFECT_CHANGE_LINK_FINAL        422
-#define EFFECT_ADD_LINKMARKER           423
-#define EFFECT_REMOVE_LINKMARKER        424
-#define EFFECT_CHANGE_LINKMARKER        425
 
 #define EVENT_STARTUP		1000
 #define EVENT_FLIP			1001

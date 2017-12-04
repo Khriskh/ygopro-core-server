@@ -46,12 +46,9 @@ protected:
 	DuelPlayer* pplayer[4];
 	DuelPlayer* cur_player[2];
 	std::set<DuelPlayer*> observers;
-#ifdef YGOPRO_SERVER_MODE
-	DuelPlayer* cache_recorder;
-	DuelPlayer* replay_recorder;
-#endif
 	bool ready[4];
 	Deck pdeck[4];
+	int deck_error[4];
 	unsigned char hand_result[2];
 	unsigned char last_response;
 	Replay last_replay;
