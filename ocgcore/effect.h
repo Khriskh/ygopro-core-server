@@ -51,7 +51,8 @@ public:
 	uint32 hint_timing[2];
 	uint32 card_type;
 	uint32 active_type;
-	uint32 active_location;
+	uint16 active_location;
+	uint16 active_sequence;
 	card* active_handler;
 	uint16 status;
 	uint32 label;
@@ -327,6 +328,7 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_EXTRA_RELEASE_SUM		155
 //#define EFFECT_TRIPLE_TRIBUTE			156
 #define EFFECT_ADD_EXTRA_TRIBUTE		157
+#define EFFECT_EXTRA_RELEASE_NONSUM		158
 #define EFFECT_PUBLIC					160
 #define EFFECT_COUNTER_PERMIT			0x10000
 #define EFFECT_COUNTER_LIMIT			0x20000
@@ -431,6 +433,10 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_CHANGE_FUSION_ATTRIBUTE	351
 #define EFFECT_EXTRA_FUSION_MATERIAL	352
 #define EFFECT_TUNER_MATERIAL_LIMIT		353
+#define EFFECT_ADD_LINK_CODE				354
+//#define EFFECT_ADD_LINK_SETCODE			355
+#define EFFECT_ADD_LINK_ATTRIBUTE		356
+#define EFFECT_ADD_LINK_RACE				357
 
 #define EVENT_STARTUP		1000
 #define EVENT_FLIP			1001
@@ -455,6 +461,7 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EVENT_CHAINING			1027
 #define EVENT_BECOME_TARGET		1028
 #define EVENT_DESTROYED			1029
+#define EVENT_MOVE			1030
 #define EVENT_ADJUST			1040
 #define EVENT_SUMMON_SUCCESS		1100
 #define EVENT_FLIP_SUMMON_SUCCESS	1101

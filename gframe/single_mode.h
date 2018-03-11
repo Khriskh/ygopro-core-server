@@ -1,7 +1,10 @@
 #ifndef SINGLE_MODE_H
 #define SINGLE_MODE_H
 
-#include "replay.h"
+#include "config.h"
+#include "data_manager.h"
+#include "deck_manager.h"
+#include "../ocgcore/mtrandom.h"
 
 namespace ygo {
 
@@ -14,7 +17,7 @@ private:
 public:
 	static bool StartPlay();
 	static void StopPlay(bool is_exiting = false);
-	static void SetResponse(unsigned char* resp, unsigned int len);
+	static void SetResponse(unsigned char* resp);
 	static int SinglePlayThread(void* param);
 	static bool SinglePlayAnalyze(char* msg, unsigned int len);
 	
@@ -28,9 +31,6 @@ public:
 
 	static byte* ScriptReader(const char* script_name, int* slen);
 	static int MessageHandler(long fduel, int type);
-
-protected:
-	static Replay last_replay;
 };
 
 }
