@@ -16,6 +16,24 @@
 #include <iostream>
 #include <algorithm>
 
+//millux
+uint32 card::get_ritual_type() {
+	if(current.location == LOCATION_SZONE && (data.type & TYPE_MONSTER))
+		return data.type;
+	return get_type();
+}
+uint32 card::set_entity_code(uint32 entity_code, bool remove_alias) {
+	card_data dat;
+	::read_card(entity_code, &dat);
+	uint32 code = dat.code;
+	if (!code)
+		return 0;
+	if (remove_alias && dat.alias)
+		dat.alias = 0;
+	data = dat;
+	return code;
+}
+
 bool card_sort::operator()(void* const & p1, void* const & p2) const {
 	card* c1 = (card*)p1;
 	card* c2 = (card*)p2;
@@ -59,6 +77,9 @@ void card::attacker_map::addcard(card* pcard) {
 	uint16 fid = pcard ? pcard->fieldid_r : 0;
 	auto pr = emplace(fid, std::make_pair(pcard, 0));
 	pr.first->second.second++;
+}
+void card_data::clear() {
+	std::memset(this, 0, sizeof(card_data));
 }
 card::card(duel* pd) {
 	scrtype = 1;
@@ -918,8 +939,8 @@ uint32 card::get_rank() {
 		return 0;
 	if(assume_type == ASSUME_RANK)
 		return assume_value;
-	if(!(current.location & LOCATION_MZONE))
-		return data.level;
+	//if(!(current.location & LOCATION_MZONE))
+	//	return data.level;
 	if (temp.level != 0xffffffff)
 		return temp.level;
 	effect_set effects;
@@ -987,6 +1008,10 @@ uint32 card::get_ritual_level(card* pcard) {
 uint32 card::check_xyz_level(card* pcard, uint32 lv) {
 	if(status & STATUS_NO_LEVEL)
 		return 0;
+	card* rcard = pduel->game_field->rose_card;
+	uint32 rlv = pduel->game_field->rose_level;
+	if(rcard == this && rlv == lv)
+		return rlv;
 	uint32 lev;
 	effect_set eset;
 	filter_effect(EFFECT_XYZ_LEVEL, &eset);
@@ -1152,7 +1177,25 @@ uint32 card::get_rscale() {
 uint32 card::get_link_marker() {
 	if(!(data.type & TYPE_LINK))
 		return 0;
-	return data.link_marker;
+	effect_set effects;
+	effect_set effects2;
+	uint32 link_marker = data.link_marker;
+	filter_effect(EFFECT_ADD_LINK_MARKER_KOISHI, &effects, FALSE);
+	filter_effect(EFFECT_REMOVE_LINK_MARKER_KOISHI, &effects);
+	filter_effect(EFFECT_CHANGE_LINK_MARKER_KOISHI, &effects2);
+	for (int32 i = 0; i < effects.size(); ++i) {
+		card* ocard = effects[i]->get_handler();
+		if (effects[i]->code == EFFECT_ADD_LINK_MARKER_KOISHI && (!(effects[i]->type & EFFECT_TYPE_FIELD) || !(ocard && ocard->get_status(STATUS_TO_LEAVE_FROMEX))))
+			link_marker |= effects[i]->get_value(this);
+		else if (effects[i]->code == EFFECT_REMOVE_LINK_MARKER_KOISHI && (!(effects[i]->type & EFFECT_TYPE_FIELD) || !(ocard && ocard->get_status(STATUS_TO_LEAVE_FROMEX))))
+			link_marker &= ~(effects[i]->get_value(this));
+	}
+	for (int32 i = 0; i < effects2.size(); ++i) {
+		card* ocard = effects2[i]->get_handler();
+		if (!(effects2[i]->type & EFFECT_TYPE_FIELD) || !(ocard && ocard->get_status(STATUS_TO_LEAVE_FROMEX)))
+			link_marker = effects2[i]->get_value(this);
+	}
+	return link_marker;
 }
 int32 card::is_link_marker(uint32 dir) {
 	return (int32)(get_link_marker() & dir);
@@ -3158,7 +3201,7 @@ int32 card::is_setable_mzone(uint8 playerid, uint8 ignore_count, effect* peffect
 	return TRUE;
 }
 int32 card::is_setable_szone(uint8 playerid, uint8 ignore_fd) {
-	if(!(data.type & TYPE_FIELD) && !ignore_fd && pduel->game_field->get_useable_count(current.controler, LOCATION_SZONE, current.controler, LOCATION_REASON_TOFIELD) <= 0)
+	if(!(data.type & TYPE_FIELD) && !ignore_fd && pduel->game_field->get_useable_count(this, current.controler, LOCATION_SZONE, current.controler, LOCATION_REASON_TOFIELD) <= 0)
 		return FALSE;
 	if(data.type & TYPE_MONSTER && !is_affected_by_effect(EFFECT_MONSTER_SSET))
 		return FALSE;
@@ -3530,9 +3573,9 @@ int32 card::is_control_can_be_changed(int32 ignore_mzone, uint32 zone) {
 		return FALSE;
 	if(current.location != LOCATION_MZONE)
 		return FALSE;
-	if(!ignore_mzone && pduel->game_field->get_useable_count(1 - current.controler, LOCATION_MZONE, current.controler, LOCATION_REASON_CONTROL, zone) <= 0)
+	if(!ignore_mzone && pduel->game_field->get_useable_count(this, 1 - current.controler, LOCATION_MZONE, current.controler, LOCATION_REASON_CONTROL, zone) <= 0)
 		return FALSE;
-	if((get_type() & TYPE_TRAPMONSTER) && pduel->game_field->get_useable_count(1 - current.controler, LOCATION_SZONE, current.controler, LOCATION_REASON_CONTROL) <= 0)
+	if((get_type() & TYPE_TRAPMONSTER) && pduel->game_field->get_useable_count(this, 1 - current.controler, LOCATION_SZONE, current.controler, LOCATION_REASON_CONTROL) <= 0)
 		return FALSE;
 	if(is_affected_by_effect(EFFECT_CANNOT_CHANGE_CONTROL))
 		return FALSE;

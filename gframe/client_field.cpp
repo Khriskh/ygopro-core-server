@@ -60,6 +60,9 @@ void ClientField::Clear() {
 			delete *cit;
 		extra[i].clear();
 	}
+	for(auto cit = limbo_temp.begin(); cit != limbo_temp.end(); ++cit)
+			delete *cit;
+	limbo_temp.clear();
 	for(auto sit = overlay_cards.begin(); sit != overlay_cards.end(); ++sit)
 		delete *sit;
 	overlay_cards.clear();
@@ -415,31 +418,37 @@ void ClientField::ShowSelectCard(bool buttonok, bool chain) {
 				myswprintf(formatBuffer, L"%ls[%d](%d)", 
 					dataManager.FormatLocation(selectable_cards[i]->overlayTarget->location, selectable_cards[i]->overlayTarget->sequence),
 					selectable_cards[i]->overlayTarget->sequence + 1, selectable_cards[i]->sequence + 1);
+			else if (selectable_cards[i]->location == 0)
+				myswprintf(formatBuffer, L"");
 			else
 				myswprintf(formatBuffer, L"%ls[%d]", dataManager.FormatLocation(selectable_cards[i]->location, selectable_cards[i]->sequence),
 					selectable_cards[i]->sequence + 1);
 			mainGame->stCardPos[i]->setText(formatBuffer);
 			// color
-			if(conti_selecting)
-				mainGame->stCardPos[i]->setBackgroundColor(0xffffffff);
-			else if(selectable_cards[i]->location == LOCATION_OVERLAY) {
-				if(selectable_cards[i]->owner != selectable_cards[i]->overlayTarget->controler)
-					mainGame->stCardPos[i]->setOverrideColor(0xff0000ff);
-				if(selectable_cards[i]->overlayTarget->controler)
-					mainGame->stCardPos[i]->setBackgroundColor(0xffd0d0d0);
-				else mainGame->stCardPos[i]->setBackgroundColor(0xffffffff);
-			} else if(selectable_cards[i]->location == LOCATION_DECK || selectable_cards[i]->location == LOCATION_EXTRA || selectable_cards[i]->location == LOCATION_REMOVED) {
-				if(selectable_cards[i]->position & POS_FACEDOWN)
-					mainGame->stCardPos[i]->setOverrideColor(0xff0000ff);
-				if(selectable_cards[i]->controler)
-					mainGame->stCardPos[i]->setBackgroundColor(0xffd0d0d0);
-				else
+			if (selectable_cards[i]->is_selected)
+				mainGame->stCardPos[i]->setBackgroundColor(0xffffff00);
+			else {
+				if(conti_selecting)
 					mainGame->stCardPos[i]->setBackgroundColor(0xffffffff);
-			} else {
-				if(selectable_cards[i]->controler)
-					mainGame->stCardPos[i]->setBackgroundColor(0xffd0d0d0);
-				else
-					mainGame->stCardPos[i]->setBackgroundColor(0xffffffff);
+				else if(selectable_cards[i]->location == LOCATION_OVERLAY) {
+					if(selectable_cards[i]->owner != selectable_cards[i]->overlayTarget->controler)
+						mainGame->stCardPos[i]->setOverrideColor(0xff0000ff);
+					if(selectable_cards[i]->overlayTarget->controler)
+						mainGame->stCardPos[i]->setBackgroundColor(0xffd0d0d0);
+					else mainGame->stCardPos[i]->setBackgroundColor(0xffffffff);
+				} else if(selectable_cards[i]->location == LOCATION_DECK || selectable_cards[i]->location == LOCATION_EXTRA || selectable_cards[i]->location == LOCATION_REMOVED) {
+					if(selectable_cards[i]->position & POS_FACEDOWN)
+						mainGame->stCardPos[i]->setOverrideColor(0xff0000ff);
+					if(selectable_cards[i]->controler)
+						mainGame->stCardPos[i]->setBackgroundColor(0xffd0d0d0);
+					else
+						mainGame->stCardPos[i]->setBackgroundColor(0xffffffff);
+				} else {
+					if(selectable_cards[i]->controler)
+						mainGame->stCardPos[i]->setBackgroundColor(0xffd0d0d0);
+					else
+						mainGame->stCardPos[i]->setBackgroundColor(0xffffffff);
+				}
 			}
 		} else {
 			if(sort_list[i]) {
@@ -645,8 +654,10 @@ void ClientField::ReplaySwap() {
 		(*cit)->is_moving = false;
 	}
 	mainGame->dInfo.isFirst = !mainGame->dInfo.isFirst;
+	mainGame->dInfo.isReplaySwapped = !mainGame->dInfo.isReplaySwapped;
 	std::swap(mainGame->dInfo.lp[0], mainGame->dInfo.lp[1]);
 	std::swap(mainGame->dInfo.strLP[0], mainGame->dInfo.strLP[1]);
+	std::swap(mainGame->dInfo.start_lp[0], mainGame->dInfo.start_lp[1]);
 	std::swap(mainGame->dInfo.hostname, mainGame->dInfo.clientname);
 	std::swap(mainGame->dInfo.hostname_tag, mainGame->dInfo.clientname_tag);
 	for(auto chit = chains.begin(); chit != chains.end(); ++chit) {
@@ -948,24 +959,44 @@ void ClientField::GetCardLocation(ClientCard* pcard, irr::core::vector3df* t, ir
 		break;
 	}
 	case LOCATION_OVERLAY: {
-		if (pcard->overlayTarget->location != 0x4) {
+		if (!(pcard->overlayTarget->location & LOCATION_ONFIELD)) {
 			return;
 		}
 		int oseq = pcard->overlayTarget->sequence;
-		if (pcard->overlayTarget->controler == 0) {
-			t->X = (matManager.vFieldMzone[0][oseq][0].Pos.X + matManager.vFieldMzone[0][oseq][1].Pos.X) / 2 - 0.12f + 0.06f * sequence;
-			t->Y = (matManager.vFieldMzone[0][oseq][0].Pos.Y + matManager.vFieldMzone[0][oseq][2].Pos.Y) / 2 + 0.05f;
-			t->Z = 0.005f + pcard->sequence * 0.0001f;
-			r->X = 0.0f;
-			r->Y = 0.0f;
-			r->Z = 0.0f;
+		if (pcard->overlayTarget->location == LOCATION_MZONE) {
+			if (pcard->overlayTarget->controler == 0) {
+				t->X = (matManager.vFieldMzone[0][oseq][0].Pos.X + matManager.vFieldMzone[0][oseq][1].Pos.X) / 2 - 0.12f + 0.06f * sequence;
+				t->Y = (matManager.vFieldMzone[0][oseq][0].Pos.Y + matManager.vFieldMzone[0][oseq][2].Pos.Y) / 2 + 0.05f;
+				t->Z = 0.005f + pcard->sequence * 0.0001f;
+				r->X = 0.0f;
+				r->Y = 0.0f;
+				r->Z = 0.0f;
+			}
+			else {
+				t->X = (matManager.vFieldMzone[1][oseq][0].Pos.X + matManager.vFieldMzone[1][oseq][1].Pos.X) / 2 + 0.12f - 0.06f * sequence;
+				t->Y = (matManager.vFieldMzone[1][oseq][0].Pos.Y + matManager.vFieldMzone[1][oseq][2].Pos.Y) / 2 - 0.05f;
+				t->Z = 0.005f + pcard->sequence * 0.0001f;
+				r->X = 0.0f;
+				r->Y = 0.0f;
+				r->Z = 3.1415926f;
+			}
 		} else {
-			t->X = (matManager.vFieldMzone[1][oseq][0].Pos.X + matManager.vFieldMzone[1][oseq][1].Pos.X) / 2 + 0.12f - 0.06f * sequence;
-			t->Y = (matManager.vFieldMzone[1][oseq][0].Pos.Y + matManager.vFieldMzone[1][oseq][2].Pos.Y) / 2 - 0.05f;
-			t->Z = 0.005f + pcard->sequence * 0.0001f;
-			r->X = 0.0f;
-			r->Y = 0.0f;
-			r->Z = 3.1415926f;
+			if (pcard->overlayTarget->controler == 0) {
+				t->X = (matManager.vFieldSzone[0][oseq][rule][0].Pos.X + matManager.vFieldSzone[0][oseq][rule][1].Pos.X) / 2 - 0.12f + 0.06f * sequence;
+				t->Y = (matManager.vFieldSzone[0][oseq][rule][0].Pos.Y + matManager.vFieldSzone[0][oseq][rule][2].Pos.Y) / 2 + 0.05f;
+				t->Z = 0.005f + pcard->sequence * 0.0001f;
+				r->X = 0.0f;
+				r->Y = 0.0f;
+				r->Z = 0.0f;
+			}
+			else {
+				t->X = (matManager.vFieldSzone[1][oseq][rule][0].Pos.X + matManager.vFieldSzone[1][oseq][rule][1].Pos.X) / 2 + 0.12f - 0.06f * sequence;
+				t->Y = (matManager.vFieldSzone[1][oseq][rule][0].Pos.Y + matManager.vFieldSzone[1][oseq][rule][2].Pos.Y) / 2 - 0.05f;
+				t->Z = 0.005f + pcard->sequence * 0.0001f;
+				r->X = 0.0f;
+				r->Y = 0.0f;
+				r->Z = 3.1415926f;
+			}
 		}
 		break;
 	}
@@ -1369,7 +1400,7 @@ void ClientField::UpdateDeclarableCodeType(bool enter) {
 	if(dataManager.GetString(trycode, &cstr) && dataManager.GetData(trycode, &cd) && is_declarable(cd, declarable_type)) {
 		mainGame->lstANCard->clear();
 		ancard.clear();
-		mainGame->lstANCard->addItem(cstr.name);
+		mainGame->lstANCard->addItem(cstr.name.c_str());
 		ancard.push_back(trycode);
 		return;
 	}
@@ -1378,15 +1409,15 @@ void ClientField::UpdateDeclarableCodeType(bool enter) {
 	mainGame->lstANCard->clear();
 	ancard.clear();
 	for(auto cit = dataManager._strings.begin(); cit != dataManager._strings.end(); ++cit) {
-		if(wcsstr(cit->second.name, pname) != 0) {
+		if(cit->second.name.find(pname) != std::wstring::npos) {
 			auto cp = dataManager.GetCodePointer(cit->first);	//verified by _strings
 			//datas.alias can be double card names or alias
 			if(is_declarable(cp->second, declarable_type)) {
-				if(wcscmp(pname, cit->second.name) == 0) { //exact match
-					mainGame->lstANCard->insertItem(0, cit->second.name, -1);
+				if(pname == cit->second.name) { //exact match
+					mainGame->lstANCard->insertItem(0, cit->second.name.c_str(), -1);
 					ancard.insert(ancard.begin(), cit->first);
 				} else {
-					mainGame->lstANCard->addItem(cit->second.name);
+					mainGame->lstANCard->addItem(cit->second.name.c_str());
 					ancard.push_back(cit->first);
 				}
 			}
@@ -1401,7 +1432,7 @@ void ClientField::UpdateDeclarableCodeOpcode(bool enter) {
 	if(dataManager.GetString(trycode, &cstr) && dataManager.GetData(trycode, &cd) && is_declarable(cd, opcode)) {
 		mainGame->lstANCard->clear();
 		ancard.clear();
-		mainGame->lstANCard->addItem(cstr.name);
+		mainGame->lstANCard->addItem(cstr.name.c_str());
 		ancard.push_back(trycode);
 		return;
 	}
@@ -1410,15 +1441,15 @@ void ClientField::UpdateDeclarableCodeOpcode(bool enter) {
 	mainGame->lstANCard->clear();
 	ancard.clear();
 	for(auto cit = dataManager._strings.begin(); cit != dataManager._strings.end(); ++cit) {
-		if(wcsstr(cit->second.name, pname) != 0) {
+		if(cit->second.name.find(pname) != std::wstring::npos) {
 			auto cp = dataManager.GetCodePointer(cit->first);	//verified by _strings
 			//datas.alias can be double card names or alias
 			if(is_declarable(cp->second, opcode)) {
-				if(wcscmp(pname, cit->second.name) == 0) { //exact match
-					mainGame->lstANCard->insertItem(0, cit->second.name, -1);
+				if(pname == cit->second.name) { //exact match
+					mainGame->lstANCard->insertItem(0, cit->second.name.c_str(), -1);
 					ancard.insert(ancard.begin(), cit->first);
 				} else {
-					mainGame->lstANCard->addItem(cit->second.name);
+					mainGame->lstANCard->addItem(cit->second.name.c_str());
 					ancard.push_back(cit->first);
 				}
 			}

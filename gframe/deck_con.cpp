@@ -3,6 +3,7 @@
 #include "data_manager.h"
 #include "deck_manager.h"
 #include "image_manager.h"
+#include "sound_manager.h"
 #include "game.h"
 #include "duelclient.h"
 #include <algorithm>
@@ -84,6 +85,7 @@ void DeckBuilder::Initialize() {
 	is_starting_dragging = false;
 	prev_deck = mainGame->cbDBDecks->getSelected();
 	prev_operation = 0;
+	prev_sel = -1;
 	is_modified = false;
 	mainGame->device->setEventReceiver(this);
 }
@@ -100,6 +102,7 @@ void DeckBuilder::Terminate() {
 	mainGame->device->setEventReceiver(&mainGame->menuHandler);
 	mainGame->wACMessage->setVisible(false);
 	mainGame->ClearTextures();
+	mainGame->showingcode = 0;
 	mainGame->scrFilter->setVisible(false);
 	int sel = mainGame->cbDBDecks->getSelected();
 	if(sel >= 0)
@@ -121,6 +124,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			break;
 		switch(event.GUIEvent.EventType) {
 		case irr::gui::EGET_BUTTON_CLICKED: {
+			soundManager.PlaySoundEffect(SOUND_BUTTON);
 			switch(id) {
 			case BUTTON_CLEAR_DECK: {
 				mainGame->gMutex.Lock();
@@ -173,6 +177,46 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				}
 				break;
 			}
+			case BUTTON_RENAME_DECK: {
+				int sel = mainGame->cbDBDecks->getSelected();
+				if(sel == -1)
+					break;
+				mainGame->gMutex.Lock();
+				mainGame->wRenameDeck->setText(dataManager.GetSysString(1367));
+				mainGame->ebREName->setText(mainGame->cbDBDecks->getItem(sel));
+				mainGame->PopupElement(mainGame->wRenameDeck);
+				mainGame->gMutex.Unlock();
+				prev_operation = id;
+				prev_sel = sel;
+				break;
+			}
+			case BUTTON_RENAME_DECK_SAVE: {
+				mainGame->HideElement(mainGame->wRenameDeck);
+				if(prev_operation == BUTTON_RENAME_DECK) {
+					wchar_t newname[256];
+					BufferIO::CopyWStr(mainGame->ebREName->getText(), newname, 256);
+					if(mywcsncasecmp(newname + wcslen(newname) - 4, L"", 4)) {
+						myswprintf(newname, L"%ls", mainGame->ebREName->getText());
+					}
+					if(DeckManager::RenameDeck(mainGame->cbDBDecks->getItem(prev_sel), newname)) {
+						mainGame->RefreshDeck(mainGame->cbDBDecks);
+						mainGame->cbDBDecks->setSelected(prev_sel);
+						mainGame->stACMessage->setText(dataManager.GetSysString(1366));
+					        mainGame->PopupElement(mainGame->wACMessage, 20);
+					} else {
+						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1365));
+					}
+				}
+				prev_operation = 0;
+				prev_sel = -1;
+				break;
+			}
+			case BUTTON_RENAME_DECK_CANCEL: {
+				mainGame->HideElement(mainGame->wRenameDeck);
+				prev_operation = 0;
+				prev_sel = -1;
+				break;
+			}
 			case BUTTON_DELETE_DECK: {
 				int sel = mainGame->cbDBDecks->getSelected();
 				if(sel == -1)
@@ -184,6 +228,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				mainGame->PopupElement(mainGame->wQuery);
 				mainGame->gMutex.Unlock();
 				prev_operation = id;
+				prev_sel = sel;
 				break;
 			}
 			case BUTTON_LEAVE_GAME: {
@@ -218,6 +263,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				for(int i = 0; i < 32; ++i, filter <<= 1)
 					if(mainGame->chkCategory[i]->isChecked())
 						filter_effect |= filter;
+				mainGame->btnEffectFilter->setPressed(filter_effect > 0);
 				mainGame->HideElement(mainGame->wCategories);
 				InstantSearch();
 				break;
@@ -225,10 +271,12 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			case BUTTON_SIDE_OK: {
 				if(deckManager.current_deck.main.size() != pre_mainc || deckManager.current_deck.extra.size() != pre_extrac
 				        || deckManager.current_deck.side.size() != pre_sidec) {
+					soundManager.PlaySoundEffect(SOUND_INFO);
 					mainGame->env->addMessageBox(L"", dataManager.GetSysString(1410));
 					break;
 				}
 				mainGame->imgCard->setImage(imageManager.tCover[0]);
+				mainGame->showingcode = 0;
 				char deckbuf[1024];
 				char* pdeck = deckbuf;
 				BufferIO::WriteInt32(pdeck, deckManager.current_deck.main.size() + deckManager.current_deck.extra.size());
@@ -260,7 +308,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 					deckManager.current_deck.extra.clear();
 					deckManager.current_deck.side.clear();
 				} else if(prev_operation == BUTTON_DELETE_DECK) {
-					int sel = mainGame->cbDBDecks->getSelected();
+					int sel = prev_sel;
 					if(deckManager.DeleteDeck(deckManager.current_deck, mainGame->cbDBDecks->getItem(sel))) {
 						mainGame->cbDBDecks->removeItem(sel);
 						int count = mainGame->cbDBDecks->getItemCount();
@@ -274,6 +322,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 						prev_deck = sel;
 						is_modified = false;
 					}
+					prev_sel = -1;
 				} else if(prev_operation == BUTTON_LEAVE_GAME) {
 					Terminate();
 				} else if(prev_operation == COMBOBOX_DBDECKS) {
@@ -316,6 +365,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				if (mainGame->btnMark[7]->isPressed())
 					filter_marks |= 0004;
 				mainGame->HideElement(mainGame->wLinkMarks);
+				mainGame->btnMarksFilter->setPressed(filter_marks > 0);
 				InstantSearch();
 				break;
 			}
@@ -511,6 +561,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			is_starting_dragging = false;
 			if(!is_draging)
 				break;
+			soundManager.PlaySoundEffect(SOUND_CARD_DROP);
 			bool pushed = false;
 			if(hovered_pos == 1)
 				pushed = push_main(draging_pointer, hovered_seq);
@@ -540,6 +591,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				auto pointer = dataManager.GetCodePointer(hovered_code);
 				if(pointer == dataManager._datas.end())
 					break;
+				soundManager.PlaySoundEffect(SOUND_CARD_DROP);
 				if(hovered_pos == 1) {
 					if(push_side(pointer))
 						pop_main(hovered_seq);
@@ -557,6 +609,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			if(!is_draging) {
 				if(hovered_pos == 0 || hovered_seq == -1)
 					break;
+				soundManager.PlaySoundEffect(SOUND_CARD_DROP);
 				if(hovered_pos == 1) {
 					pop_main(hovered_seq);
 				} else if(hovered_pos == 2) {
@@ -573,6 +626,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 						push_side(pointer);
 				}
 			} else {
+				soundManager.PlaySoundEffect(SOUND_CARD_PICK);
 				if(click_pos == 1) {
 					push_side(draging_pointer);
 				} else if(click_pos == 2) {
@@ -599,6 +653,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			auto pointer = dataManager.GetCodePointer(hovered_code);
 			if(!check_limit(pointer))
 				break;
+			soundManager.PlaySoundEffect(SOUND_CARD_PICK);
 			if (hovered_pos == 1) {
 				if(!push_main(pointer))
 					push_side(pointer);
@@ -617,6 +672,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 		case irr::EMIE_MOUSE_MOVED: {
 			if(is_starting_dragging) {
 				is_draging = true;
+				soundManager.PlaySoundEffect(SOUND_CARD_PICK);
 				if(hovered_pos == 1)
 					pop_main(hovered_seq);
 				else if(hovered_pos == 2)
@@ -631,6 +687,11 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 		}
 		case irr::EMIE_MOUSE_WHEEL: {
 			if(!mainGame->scrFilter->isVisible())
+				break;
+			if(mainGame->env->hasFocus(mainGame->scrFilter))
+				break;
+			irr::gui::IGUIElement* root = mainGame->env->getRootGUIElement();
+			if(root->getElementFromPoint(mouse_pos) != root)
 				break;
 			if(event.MouseInput.Wheel < 0) {
 				if(mainGame->scrFilter->getPos() < mainGame->scrFilter->getMax())
@@ -657,8 +718,9 @@ void DeckBuilder::GetHoveredCard() {
 	irr::gui::IGUIElement* root = mainGame->env->getRootGUIElement();
 	if(root->getElementFromPoint(mouse_pos) != root)
 		return;
-	int x = mouse_pos.X;
-	int y = mouse_pos.Y;
+	position2di pos = mainGame->ResizeReverse(mouse_pos.X, mouse_pos.Y);
+	int x = pos.X;
+	int y = pos.Y;
 	int pre_code = hovered_code;
 	hovered_pos = 0;
 	hovered_code = 0;
@@ -727,8 +789,8 @@ void DeckBuilder::GetHoveredCard() {
 		}
 	}
 	if(is_draging) {
-		dragx = x;
-		dragy = y;
+		dragx = mouse_pos.X;
+		dragy = mouse_pos.Y;
 	}
 	if(!is_draging && pre_code != hovered_code) {
 		if(hovered_code)
@@ -755,7 +817,7 @@ void DeckBuilder::FilterCards() {
 	results.clear();
 	const wchar_t* pstr = mainGame->ebCardName->getText();
 	int trycode = BufferIO::GetVal(pstr);
-	if(dataManager.GetData(trycode, 0)) {
+	if (dataManager.GetData(trycode, 0)) {
 		auto ptr = dataManager.GetCodePointer(trycode);	// verified by GetData()
 		results.push_back(ptr);
 		mainGame->scrFilter->setVisible(false);
@@ -763,106 +825,146 @@ void DeckBuilder::FilterCards() {
 		myswprintf(result_string, L"%d", results.size());
 		return;
 	}
-	unsigned int set_code = 0;
-	if(pstr[0] == L'@')
-		set_code = dataManager.GetSetCode(&pstr[1]);
-	else
-		set_code = dataManager.GetSetCode(&pstr[0]);
-	if(pstr[0] == 0 || (pstr[0] == L'$' && pstr[1] == 0) || (pstr[0] == L'@' && pstr[1] == 0))
-		pstr = 0;
+	std::wstring str = std::wstring(pstr);
+	std::vector<std::wstring> query_elements;
+	std::vector<std::vector<std::wstring>::iterator> query_elements_track;
+	size_t element_start = 0;
+	while (1) {
+		size_t element_end = str.find_first_of(L' ', element_start);
+		if (element_end == std::wstring::npos) {
+			break;
+		}
+		size_t length = element_end - element_start;
+		if(length > 0) {
+			query_elements.push_back(str.substr(element_start, length));
+			element_start = element_end + 1;
+		} else {
+			element_start++;
+		}
+	}
+	query_elements.push_back(str.substr(element_start));
+	std::unordered_map<std::wstring, unsigned int> set_code_map;
+	for (auto elements_iterator = query_elements.begin(); elements_iterator != query_elements.end(); elements_iterator++) {
+		const wchar_t* element_pointer = elements_iterator->c_str();
+		if (element_pointer[0] == L'@')
+			set_code_map[*elements_iterator] = dataManager.GetSetCode(&element_pointer[1]);
+		else
+			set_code_map[*elements_iterator] = dataManager.GetSetCode(&element_pointer[0]);			
+		if (element_pointer[0] == 0 || (element_pointer[0] == L'$' && element_pointer[1] == 0) || (element_pointer[0] == L'@' && element_pointer[1] == 0))
+			query_elements_track.push_back(elements_iterator);
+	}
+	for (auto elements_track_iterator = query_elements_track.begin(); elements_track_iterator != query_elements_track.end(); elements_track_iterator++) {
+		query_elements.erase(*elements_track_iterator);
+	}
 	auto strpointer = dataManager._strings.begin();
-	for(code_pointer ptr = dataManager._datas.begin(); ptr != dataManager._datas.end(); ++ptr, ++strpointer) {
+	for (code_pointer ptr = dataManager._datas.begin(); ptr != dataManager._datas.end(); ++ptr, ++strpointer) {
 		const CardDataC& data = ptr->second;
 		const CardString& text = strpointer->second;
-		if(data.type & TYPE_TOKEN)
+		if (data.type & TYPE_TOKEN)
 			continue;
-		switch(filter_type) {
+		switch (filter_type) {
 		case 1: {
-			if(!(data.type & TYPE_MONSTER) || (data.type & filter_type2) != filter_type2)
+			if (!(data.type & TYPE_MONSTER) || (data.type & filter_type2) != filter_type2)
 				continue;
-			if(filter_race && data.race != filter_race)
+			if (filter_race && data.race != filter_race)
 				continue;
-			if(filter_attrib && data.attribute != filter_attrib)
+			if (filter_attrib && data.attribute != filter_attrib)
 				continue;
-			if(filter_atktype) {
-				if((filter_atktype == 1 && data.attack != filter_atk) || (filter_atktype == 2 && data.attack < filter_atk)
-				        || (filter_atktype == 3 && data.attack <= filter_atk) || (filter_atktype == 4 && (data.attack > filter_atk || data.attack < 0))
-				        || (filter_atktype == 5 && (data.attack >= filter_atk || data.attack < 0)) || (filter_atktype == 6 && data.attack != -2))
+			if (filter_atktype) {
+				if ((filter_atktype == 1 && data.attack != filter_atk) || (filter_atktype == 2 && data.attack < filter_atk)
+					|| (filter_atktype == 3 && data.attack <= filter_atk) || (filter_atktype == 4 && (data.attack > filter_atk || data.attack < 0))
+					|| (filter_atktype == 5 && (data.attack >= filter_atk || data.attack < 0)) || (filter_atktype == 6 && data.attack != -2))
 					continue;
 			}
 			if(filter_deftype) {
 				if((filter_deftype == 1 && data.defense != filter_def) || (filter_deftype == 2 && data.defense < filter_def)
-				        || (filter_deftype == 3 && data.defense <= filter_def) || (filter_deftype == 4 && (data.defense > filter_def || data.defense < 0))
-				        || (filter_deftype == 5 && (data.defense >= filter_def || data.defense < 0)) || (filter_deftype == 6 && data.defense != -2)
-				        || (data.type & TYPE_LINK))
+						|| (filter_deftype == 3 && data.defense <= filter_def) || (filter_deftype == 4 && (data.defense > filter_def || data.defense < 0))
+						|| (filter_deftype == 5 && (data.defense >= filter_def || data.defense < 0)) || (filter_deftype == 6 && data.defense != -2)
+						|| (data.type & TYPE_LINK))
 					continue;
 			}
-			if(filter_lvtype) {
-				if((filter_lvtype == 1 && data.level != filter_lv) || (filter_lvtype == 2 && data.level < filter_lv)
-				        || (filter_lvtype == 3 && data.level <= filter_lv) || (filter_lvtype == 4 && data.level > filter_lv)
-				        || (filter_lvtype == 5 && data.level >= filter_lv) || filter_lvtype == 6)
+			if (filter_lvtype) {
+				if ((filter_lvtype == 1 && data.level != filter_lv) || (filter_lvtype == 2 && data.level < filter_lv)
+					|| (filter_lvtype == 3 && data.level <= filter_lv) || (filter_lvtype == 4 && data.level > filter_lv)
+					|| (filter_lvtype == 5 && data.level >= filter_lv) || filter_lvtype == 6)
 					continue;
 			}
+
 			if(filter_scltype) {
 				if((filter_scltype == 1 && data.lscale != filter_scl) || (filter_scltype == 2 && data.lscale < filter_scl)
-				        || (filter_scltype == 3 && data.lscale <= filter_scl) || (filter_scltype == 4 && (data.lscale > filter_scl || data.lscale == 0))
-				        || (filter_scltype == 5 && (data.lscale >= filter_scl || data.lscale == 0)) || filter_scltype == 6
-				        || !(data.type & TYPE_PENDULUM))
+						|| (filter_scltype == 3 && data.lscale <= filter_scl) || (filter_scltype == 4 && (data.lscale > filter_scl || data.lscale == 0))
+						|| (filter_scltype == 5 && (data.lscale >= filter_scl || data.lscale == 0)) || filter_scltype == 6
+						|| !(data.type & TYPE_PENDULUM))
 					continue;
 			}
 			break;
 		}
 		case 2: {
-			if(!(data.type & TYPE_SPELL))
+			if (!(data.type & TYPE_SPELL))
 				continue;
-			if(filter_type2 && data.type != filter_type2)
+			if (filter_type2 && data.type != filter_type2)
 				continue;
 			break;
 		}
 		case 3: {
-			if(!(data.type & TYPE_TRAP))
+			if (!(data.type & TYPE_TRAP))
 				continue;
-			if(filter_type2 && data.type != filter_type2)
+			if (filter_type2 && data.type != filter_type2)
 				continue;
 			break;
 		}
 		}
-		if(filter_effect && !(data.category & filter_effect))
+		if (filter_effect && !(data.category & filter_effect))
 			continue;
 		if(filter_marks && (data.link_marker & filter_marks)!= filter_marks)
 			continue;
 		if(filter_lm) {
 			if(filter_lm <= 3 && (!filterList->count(ptr->first) || (*filterList)[ptr->first] != filter_lm - 1))
 				continue;
-			if(filter_lm == 4 && data.ot != 1)
+			if (filter_lm == 4 && data.ot != 1)
 				continue;
-			if(filter_lm == 5 && data.ot != 2)
+			if (filter_lm == 5 && data.ot != 2)
 				continue;
 			if(filter_lm == 6 && data.ot != 3)
 				continue;
 			if(filter_lm == 7 && data.ot != 4)
 				continue;
 		}
-		if(pstr) {
-			if(pstr[0] == L'$') {
-				if(!CardNameContains(text.name, &pstr[1]))
-					continue;
-			} else if(pstr[0] == L'@' && set_code) {
-				if(!check_set_code(data, set_code)) continue;
+		bool is_target = true;
+		for (auto elements_iterator = query_elements.begin(); elements_iterator != query_elements.end(); elements_iterator++) {
+			const wchar_t* element_pointer = elements_iterator->c_str();
+			if (element_pointer[0] == L'$') {
+				if(!CardNameContains(text.name.c_str(), &element_pointer[1])){
+					is_target = false;
+					break;
+				}
+			}
+			else if (element_pointer[0] == L'@' && set_code_map[*elements_iterator]) {
+				if(!check_set_code(data, set_code_map[*elements_iterator])) {
+					is_target = false;
+					break;
+				}
 			} else {
-				if(!CardNameContains(text.name, pstr) && wcsstr(text.text, pstr) == 0
-					&& (!set_code || !check_set_code(data, set_code)))
-					continue;
+				if (!CardNameContains(text.name.c_str(), elements_iterator->c_str()) && text.text.find(elements_iterator->c_str()) == std::wstring::npos
+					&& (!set_code_map[*elements_iterator] || !check_set_code(data, set_code_map[*elements_iterator]))) {
+					is_target = false;
+					break;
+				}
 			}
 		}
-		results.push_back(ptr);
+		if (is_target) {
+			results.push_back(ptr);
+		} else {
+			continue;
+		}
 	}
 	myswprintf(result_string, L"%d", results.size());
-	if(results.size() > 7) {
+	if (results.size() > 7) {
 		mainGame->scrFilter->setVisible(true);
 		mainGame->scrFilter->setMax(results.size() - 7);
 		mainGame->scrFilter->setPos(0);
-	} else {
+	}
+	else {
 		mainGame->scrFilter->setVisible(false);
 		mainGame->scrFilter->setPos(0);
 	}
@@ -901,6 +1003,8 @@ void DeckBuilder::ClearFilter() {
 	filter_marks = 0;
 	for(int i = 0; i < 8; i++)
 		mainGame->btnMark[i]->setPressed(false);
+	mainGame->btnEffectFilter->setPressed(false);
+	mainGame->btnMarksFilter->setPressed(false);
 }
 void DeckBuilder::SortList() {
 	auto left = results.begin();

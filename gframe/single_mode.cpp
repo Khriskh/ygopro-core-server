@@ -47,6 +47,8 @@ int SingleMode::SinglePlayThread(void* param) {
 	set_player_info(pduel, 1, start_lp, start_hand, draw_count);
 	mainGame->dInfo.lp[0] = start_lp;
 	mainGame->dInfo.lp[1] = start_lp;
+	mainGame->dInfo.start_lp[0] = start_lp;
+	mainGame->dInfo.start_lp[1] = start_lp;
 	myswprintf(mainGame->dInfo.strLP[0], L"%d", mainGame->dInfo.lp[0]);
 	myswprintf(mainGame->dInfo.strLP[1], L"%d", mainGame->dInfo.lp[1]);
 	BufferIO::CopyWStr(mainGame->ebNickName->getText(), mainGame->dInfo.hostname, 20);
@@ -97,6 +99,7 @@ int SingleMode::SinglePlayThread(void* param) {
 	mainGame->dField.Clear();
 	mainGame->dInfo.isFirst = true;
 	mainGame->dInfo.isStarted = true;
+	mainGame->dInfo.isFinished = false;
 	mainGame->dInfo.isSingleMode = true;
 	mainGame->device->setEventReceiver(&mainGame->dField);
 	mainGame->gMutex.Unlock();
@@ -139,6 +142,7 @@ int SingleMode::SinglePlayThread(void* param) {
 	wchar_t timetext[80];
 	mbstowcs(timetext, timebuf, size);
 	mainGame->ebRSName->setText(timetext);
+	mainGame->wReplaySave->setText(dataManager.GetSysString(1340));
 	mainGame->PopupElement(mainGame->wReplaySave);
 	mainGame->gMutex.Unlock();
 	mainGame->replaySignal.Reset();
@@ -149,6 +153,7 @@ int SingleMode::SinglePlayThread(void* param) {
 	if(!is_closing) {
 		mainGame->gMutex.Lock();
 		mainGame->dInfo.isStarted = false;
+		mainGame->dInfo.isFinished = true;
 		mainGame->dInfo.isSingleMode = false;
 		mainGame->gMutex.Unlock();
 		mainGame->closeDoneSignal.Reset();
@@ -262,6 +267,19 @@ bool SingleMode::SinglePlayAnalyze(char* msg, unsigned int len) {
 		case MSG_SELECT_TRIBUTE: {
 			player = BufferIO::ReadInt8(pbuf);
 			pbuf += 3;
+			count = BufferIO::ReadInt8(pbuf);
+			pbuf += count * 8;
+			if(!DuelClient::ClientAnalyze(offset, pbuf - offset)) {
+				mainGame->singleSignal.Reset();
+				mainGame->singleSignal.Wait();
+			}
+			break;
+		}
+		case MSG_SELECT_UNSELECT_CARD: {
+			player = BufferIO::ReadInt8(pbuf);
+			pbuf += 4;
+			count = BufferIO::ReadInt8(pbuf);
+			pbuf += count * 8;
 			count = BufferIO::ReadInt8(pbuf);
 			pbuf += count * 8;
 			if(!DuelClient::ClientAnalyze(offset, pbuf - offset)) {

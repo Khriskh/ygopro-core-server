@@ -13,8 +13,12 @@
 
 #ifdef _MSC_VER
 #define myswprintf _swprintf
+#define mywcsncasecmp _wcsnicmp
+#define mystrncasecmp _strnicmp
 #else
 #define myswprintf swprintf
+#define mywcsncasecmp wcsncasecmp
+#define mystrncasecmp strncasecmp
 #endif
 
 #define socklen_t int
@@ -41,6 +45,8 @@
 
 #include <wchar.h>
 #define myswprintf(buf, fmt, ...) swprintf(buf, 4096, fmt, ##__VA_ARGS__)
+#define mywcsncasecmp wcsncasecmp
+#define mystrncasecmp strncasecmp
 inline int _wtoi(const wchar_t * s) {
 	wchar_t * endptr;
 	return (int)wcstol(s, &endptr, 10);
@@ -49,8 +55,13 @@ inline int _wtoi(const wchar_t * s) {
 
 #ifndef YGOPRO_SERVER_MODE
 #include <irrlicht.h>
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#else
 #include <GL/gl.h>
 #include <GL/glu.h>
+#endif
 #include "CGUITTFont.h"
 #include "CGUIImageButton.h"
 #endif //YGOPRO_SERVER_MODE
@@ -75,7 +86,7 @@ using namespace io;
 using namespace gui;
 #endif //YGOPRO_SERVER_MODE
 
-extern const unsigned short PRO_VERSION;
+extern unsigned short PRO_VERSION;
 extern int enable_log;
 extern bool exit_on_return;
 extern bool open_file;

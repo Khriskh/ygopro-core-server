@@ -47,18 +47,31 @@ struct Config {
 	int chkIgnoreDeckChanges;
 	int defaultOT;
 	int enable_bot_mode;
+	bool window_maximized;
+	int window_width;
+	int window_height;
+	bool resize_popup_menu;
+	bool enable_sound;
+	bool enable_music;
+	double sound_volume;
+	double music_volume;
+	int music_mode;
+	int chkEnablePScale;
 };
 
 struct DuelInfo {
 	bool isStarted;
+	bool isFinished;
 	bool isReplay;
 	bool isReplaySkiping;
 	bool isFirst;
 	bool isTag;
 	bool isSingleMode;
 	bool is_shuffling;
+	bool is_swapped;
 	bool tag_player[2];
 	int lp[2];
+	int start_lp[2];
 	int duel_rule;
 	int turn;
 	short curMsg;
@@ -72,6 +85,10 @@ struct DuelInfo {
 	unsigned char time_player;
 	unsigned short time_limit;
 	unsigned short time_left[2];
+	wchar_t str_time_limit[16];
+	wchar_t str_time_left[2][16];
+	video::SColor time_color[2];
+	bool isReplaySwapped;
 };
 
 struct BotInfo {
@@ -102,9 +119,11 @@ public:
 #ifdef YGOPRO_SERVER_MODE
 	void MainServerLoop();
 	void LoadExpansionDB();
+	void LoadBetaDB();
 	void AddDebugMsg(char* msgbuf);
 #else
 	void MainLoop();
+	void RefreshTimeDisplay();
 	void BuildProjectionMatrix(irr::core::matrix4& mProjection, f32 left, f32 right, f32 bottom, f32 top, f32 znear, f32 zfar);
 	void InitStaticText(irr::gui::IGUIStaticText* pControl, u32 cWidth, u32 cHeight, irr::gui::CGUITTFont* font, const wchar_t* text);
 	void SetStaticText(irr::gui::IGUIStaticText* pControl, u32 cWidth, irr::gui::CGUITTFont* font, const wchar_t* text, u32 pos = 0);
@@ -114,11 +133,13 @@ public:
 	void RefreshSingleplay();
 	void RefreshBot();
 	void DrawSelectionLine(irr::video::S3DVertex* vec, bool strip, int width, float* cv);
+	void DrawSelectionLine(irr::gui::IGUIElement* element, int width, irr::video::SColor color);
 	void DrawBackGround();
 	void DrawLinkedZones(ClientCard* pcard);
 	void CheckMutual(ClientCard* pcard, int mark);
 	void DrawCards();
 	void DrawCard(ClientCard* pcard);
+	void DrawShadowText(irr::gui::CGUITTFont* font, const core::stringw& text, const core::rect<s32>& position, const core::rect<s32>& padding, video::SColor color = 0xffffffff, video::SColor shadowcolor = 0xff000000, bool hcenter = false, bool vcenter = false, const core::rect<s32>* clip = 0);
 	void DrawMisc();
 	void DrawStatus(ClientCard* pcard, int x1, int y1, int x2, int y2);
 	void DrawGUI();
@@ -128,11 +149,11 @@ public:
 	void HideElement(irr::gui::IGUIElement* element, bool set_action = false);
 	void PopupElement(irr::gui::IGUIElement* element, int hideframe = 0);
 	void WaitFrameSignal(int frame);
-	void DrawThumb(code_pointer cp, position2di pos, std::unordered_map<int, int>* lflist);
+	void DrawThumb(code_pointer cp, position2di pos, std::unordered_map<int, int>* lflist, bool drag = false);
 	void DrawDeckBd();
 	void LoadConfig();
 	void SaveConfig();
-	void ShowCardInfo(int code);
+	void ShowCardInfo(int code, bool resize = false);
 	void AddChatMsg(wchar_t* msg, int player);
 	void AddDebugMsg(char* msgbuf);
 	void ClearTextures();
@@ -146,8 +167,17 @@ public:
 		return focus && focus->hasType(type);
 	}
 
+	void OnResize();
+	recti Resize(s32 x, s32 y, s32 x2, s32 y2);
+	recti Resize(s32 x, s32 y, s32 x2, s32 y2, s32 dx, s32 dy, s32 dx2, s32 dy2);
+	position2di Resize(s32 x, s32 y);
+	position2di ResizeReverse(s32 x, s32 y);
+	recti ResizeElem(s32 x, s32 y, s32 x2, s32 y2);
+	recti ResizeWin(s32 x, s32 y, s32 x2, s32 y2, bool chat = false);
+
 	void SetWindowsIcon();
 	void FlashWindow();
+	void SetCursor(ECURSOR_ICON icon);
 
 	Mutex gMutex;
 	Mutex gBuffer;
@@ -169,10 +199,12 @@ public:
 	bool hideChat;
 	int chatTiming[8];
 	int chatType[8];
-	unsigned short linePattern;
+	unsigned short linePatternD3D;
+	unsigned short linePatternGL;
 	int waitFrame;
 	int signalFrame;
 	int actionParam;
+	int showingcode;
 	const wchar_t* showingtext;
 	int showcard;
 	int showcardcode;
@@ -194,6 +226,10 @@ public:
 
 	bool is_building;
 	bool is_siding;
+
+	irr::core::dimension2d<irr::u32> window_size;
+	float xScale;
+	float yScale;
 
 	ClientField dField;
 	DeckBuilder deckBuilder;
@@ -229,6 +265,9 @@ public:
 	irr::gui::IGUIStaticText* stSetName;
 	irr::gui::IGUIStaticText* stText;
 	irr::gui::IGUIScrollBar* scrCardText;
+	irr::gui::IGUIListBox* lstLog;
+	irr::gui::IGUIButton* btnClearLog;
+	irr::gui::IGUIButton* btnSaveLog;
 	irr::gui::IGUICheckBox* chkMAutoPos;
 	irr::gui::IGUICheckBox* chkSTAutoPos;
 	irr::gui::IGUICheckBox* chkRandomPos;
@@ -238,9 +277,12 @@ public:
 	irr::gui::IGUICheckBox* chkHideHintButton;
 	irr::gui::IGUICheckBox* chkIgnoreDeckChanges;
 	irr::gui::IGUICheckBox* chkAutoSearch;
-	irr::gui::IGUIListBox* lstLog;
-	irr::gui::IGUIButton* btnClearLog;
-	irr::gui::IGUIButton* btnSaveLog;
+	irr::gui::IGUICheckBox* chkEnableSound;
+	irr::gui::IGUICheckBox* chkEnableMusic;
+	irr::gui::IGUIScrollBar* scrSoundVolume;
+	irr::gui::IGUIScrollBar* scrMusicVolume;
+	irr::gui::IGUICheckBox* chkMusicMode;
+	irr::gui::IGUICheckBox* chkEnablePScale;
 	//main menu
 	irr::gui::IGUIWindow* wMainMenu;
 	irr::gui::IGUIButton* btnLanMode;
@@ -295,6 +337,8 @@ public:
 	irr::gui::IGUIListBox* lstReplayList;
 	irr::gui::IGUIStaticText* stReplayInfo;
 	irr::gui::IGUIButton* btnLoadReplay;
+	irr::gui::IGUIButton* btnDeleteReplay;
+	irr::gui::IGUIButton* btnRenameReplay;
 	irr::gui::IGUIButton* btnReplayCancel;
 	irr::gui::IGUIEditBox* ebRepStartTurn;
 	//single play
@@ -409,6 +453,23 @@ public:
 	irr::gui::IGUIButton* btnSideSort;
 	irr::gui::IGUIButton* btnSideReload;
 	irr::gui::IGUIEditBox* ebDeckname;
+	irr::gui::IGUIStaticText* stBanlist;
+	irr::gui::IGUIStaticText* stDeck;
+	irr::gui::IGUIStaticText* stCategory;
+	irr::gui::IGUIStaticText* stLimit;
+	irr::gui::IGUIStaticText* stAttribute;
+	irr::gui::IGUIStaticText* stRace;
+	irr::gui::IGUIStaticText* stAttack;
+	irr::gui::IGUIStaticText* stDefense;
+	irr::gui::IGUIStaticText* stStar;
+	irr::gui::IGUIStaticText* stSearch;
+	irr::gui::IGUIStaticText* stScale;
+	irr::gui::IGUIButton* btnRenameDeck;
+	//deck rename
+	irr::gui::IGUIWindow* wRenameDeck;
+	irr::gui::IGUIEditBox* ebREName;
+	irr::gui::IGUIButton* btnREYes;
+	irr::gui::IGUIButton* btnRENo;
 	//filter
 	irr::gui::IGUIStaticText* wFilter;
 	irr::gui::IGUIScrollBar* scrFilter;
@@ -515,6 +576,8 @@ extern HostInfo game_info;
 #define LISTBOX_REPLAY_LIST			130
 #define BUTTON_LOAD_REPLAY			131
 #define BUTTON_CANCEL_REPLAY		132
+#define BUTTON_DELETE_REPLAY		133
+#define BUTTON_RENAME_REPLAY		134
 #define EDITBOX_CHAT				140
 #define BUTTON_MSG_OK				200
 #define BUTTON_YES					201
@@ -608,11 +671,27 @@ extern HostInfo game_info;
 #define BUTTON_LOAD_SINGLEPLAY		351
 #define BUTTON_CANCEL_SINGLEPLAY	352
 #define CHECKBOX_AUTO_SEARCH		360
+#define CHECKBOX_ENABLE_SOUND		361
+#define CHECKBOX_ENABLE_MUSIC		362
+#define SCROLL_VOLUME				363
+
 #define COMBOBOX_SORTTYPE			370
 #define COMBOBOX_LIMIT				371
 
 #define BUTTON_MARKS_FILTER			380
 #define BUTTON_MARKERS_OK			381
+
+#define BUTTON_RENAME_DECK			386
+#define BUTTON_RENAME_DECK_SAVE			387
+#define BUTTON_RENAME_DECK_CANCEL		388
+
+#define TEXTURE_DUEL				0
+#define TEXTURE_DECK				1
+#define TEXTURE_MENU				2
+#define TEXTURE_COVER_S				3
+#define TEXTURE_COVER_O				4
+#define TEXTURE_ATTACK				5
+#define TEXTURE_ACTIVATE			6
 
 #define DEFAULT_DUEL_RULE			4
 #endif // GAME_H

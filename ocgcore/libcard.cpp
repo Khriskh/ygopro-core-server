@@ -13,6 +13,116 @@
 #include "group.h"
 #include <iostream>
 
+int32 scriptlib::card_is_ritual_type(lua_State *L) {
+	check_param_count(L, 2);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	uint32 ttype = lua_tointeger(L, 2);
+	if(pcard->get_ritual_type() & ttype)
+		lua_pushboolean(L, 1);
+	else
+		lua_pushboolean(L, 0);
+	return 1;
+}
+int32 scriptlib::card_set_entity_code(lua_State *L) {
+	check_param_count(L, 2);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	uint32 trace = lua_tointeger(L, 2);
+	bool remove_alias = false;
+	int32 enable = lua_toboolean(L, 3);
+	if (enable)
+		remove_alias = true;
+	lua_pushinteger(L, pcard->set_entity_code(trace, remove_alias));
+	return 1;
+}
+int32 scriptlib::card_set_card_data(lua_State *L) {
+	check_param_count(L, 3);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	int32 stype = lua_tointeger(L, 2);
+	switch(stype) {
+	case CARDDATA_CODE:
+		pcard->data.code = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_ALIAS:
+		pcard->data.alias = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_SETCODE:
+		pcard->data.setcode = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_TYPE:
+		pcard->data.type = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_LEVEL:
+		pcard->data.level = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_ATTRIBUTE:
+		pcard->data.attribute = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_RACE:
+		pcard->data.race = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_ATTACK:
+		pcard->data.attack = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_DEFENSE:
+		pcard->data.defense = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_LSCALE:
+		pcard->data.lscale = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_RSCALE:
+		pcard->data.rscale = lua_tointeger(L, 3);
+		break;
+	case CARDDATA_LINK_MARKER:
+		pcard->data.link_marker = lua_tointeger(L, 3);
+		break;
+	}
+	return 0;
+}
+int32 scriptlib::card_get_link_marker(lua_State *L) {
+	check_param_count(L, 1);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	lua_pushinteger(L, pcard->get_link_marker());
+	return 1;
+}
+int32 scriptlib::card_get_origin_link_marker(lua_State *L) {
+	check_param_count(L, 1);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	if(pcard->status & STATUS_NO_LEVEL)
+		lua_pushinteger(L, 0);
+	else
+		lua_pushinteger(L, pcard->data.link_marker);
+	return 1;
+}
+int32 scriptlib::card_is_xyz_summonable_by_rose(lua_State *L) {
+	check_param_count(L, 3);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	check_param(L, PARAM_TYPE_CARD, 2);
+	check_param(L, PARAM_TYPE_CARD, 3);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	if(!(pcard->data.type & TYPE_XYZ))
+		return 0;
+	card* rcard = *(card**) lua_touserdata(L, 2);
+	card* mcard = *(card**) lua_touserdata(L, 3);
+	group* materials = pcard->pduel->new_group(rcard);
+	materials->container.insert(mcard);
+	uint32 p = pcard->pduel->game_field->core.reason_player;
+	pcard->pduel->game_field->core.limit_xyz = materials;
+	pcard->pduel->game_field->core.limit_xyz_minc = 2;
+	pcard->pduel->game_field->core.limit_xyz_maxc = 2;
+	pcard->pduel->game_field->rose_card = rcard;
+	pcard->pduel->game_field->rose_level = mcard->get_level();
+	int32 result = pcard->is_special_summonable(p, SUMMON_TYPE_XYZ);
+	pcard->pduel->game_field->rose_card = 0;
+	pcard->pduel->game_field->rose_level = 0;
+	lua_pushboolean(L, result);
+	return 1;
+}
+
 int32 scriptlib::card_get_code(lua_State *L) {
 	check_param_count(L, 1);
 	check_param(L, PARAM_TYPE_CARD, 1);
@@ -1011,7 +1121,7 @@ int32 scriptlib::card_is_status(lua_State *L) {
 	check_param_count(L, 2);
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
-	uint32 tstatus = lua_tounsigned(L, 2);
+	uint32 tstatus = lua_tointeger(L, 2);
 	if(pcard->status & tstatus)
 		lua_pushboolean(L, 1);
 	else
@@ -1035,7 +1145,7 @@ int32 scriptlib::card_set_status(lua_State *L) {
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	if(pcard->status & STATUS_COPYING_EFFECT)
 		return 0;
-	uint32 tstatus = lua_tounsigned(L, 2);
+	uint32 tstatus = lua_tointeger(L, 2);
 	int32 enable = lua_toboolean(L, 3);
 	pcard->set_status(tstatus, enable);
 	return 0;
@@ -1563,7 +1673,7 @@ int32 scriptlib::card_set_flag_effect_label(lua_State *L) {
 	check_param_count(L, 3);
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
-	uint32 code = (lua_tounsigned(L, 2) & 0xfffffff) | 0x10000000;
+	uint32 code = (lua_tointeger(L, 2) & 0xfffffff) | 0x10000000;
 	int32 lab = lua_tointeger(L, 3);
 	auto eit = pcard->single_effect.find(code);
 	if(eit == pcard->single_effect.end())
@@ -1578,7 +1688,7 @@ int32 scriptlib::card_get_flag_effect_label(lua_State *L) {
 	check_param_count(L, 2);
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
-	uint32 code = (lua_tounsigned(L, 2) & 0xfffffff) | 0x10000000;
+	uint32 code = (lua_tointeger(L, 2) & 0xfffffff) | 0x10000000;
 	auto rg = pcard->single_effect.equal_range(code);
 	int32 count = 0;
 	for(; rg.first != rg.second; ++rg.first) {
