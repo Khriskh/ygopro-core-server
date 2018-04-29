@@ -14,6 +14,7 @@
 #include "duelclient.h"
 #include "netserver.h"
 #include "single_mode.h"
+#include <sstream>
 #endif //YGOPRO_SERVER_MODE
 
 #ifndef _WIN32
@@ -96,6 +97,23 @@ bool Game::Initialize() {
 	device = irr::createDeviceEx(params);
 	if(!device)
 		return false;
+	// Apply skin
+	if(gameConf.skin_index && gameConf.use_d3d) {
+		wchar_t skin_dir[16];
+		myswprintf(skin_dir, L"skin");
+		skinSystem = new CGUISkinSystem(skin_dir, device);
+		core::array<core::stringw> skins = skinSystem->listSkins();
+		size_t count = skins.size();
+		if(count > 0) {
+			int index = -1;
+			if(gameConf.skin_index < 0)
+				index = rand() % count;
+			else if((size_t)gameConf.skin_index <= skins.size())
+				index = skins.size() - gameConf.skin_index; // reverse index
+			if(index >= 0)
+				skinSystem->applySkin(skins[index].c_str());
+		}
+	}
 	linePatternD3D = 0;
 	linePatternGL = 0x0f0f;
 	waitFrame = 0;
@@ -333,7 +351,7 @@ bool Game::Initialize() {
 	//system
 	irr::gui::IGUITab* tabSystem = wInfos->addTab(dataManager.GetSysString(1273));
 	posY = 20;
-	chkIgnore1 = env->addCheckBox(false, rect<s32>(posX, posY, posX + 260, posY + 25), tabSystem, -1, dataManager.GetSysString(1290));
+	chkIgnore1 = env->addCheckBox(false, rect<s32>(posX, posY, posX + 260, posY + 25), tabSystem, CHECKBOX_DISABLE_CHAT, dataManager.GetSysString(1290));
 	chkIgnore1->setChecked(gameConf.chkIgnore1 != 0);
 	posY += 30;
 	chkIgnore2 = env->addCheckBox(false, rect<s32>(posX, posY, posX + 260, posY + 25), tabSystem, -1, dataManager.GetSysString(1291));
@@ -1173,6 +1191,7 @@ void Game::LoadConfig() {
 	gameConf.window_height = 640;
 	gameConf.resize_popup_menu = false;
 	gameConf.chkEnablePScale = 1;
+	gameConf.skin_index = -1;
 	if(fp) {
 		while(fgets(linebuf, 256, fp)) {
 			sscanf(linebuf, "%s = %s", strbuf, valbuf);
@@ -1258,6 +1277,8 @@ void Game::LoadConfig() {
 				gameConf.resize_popup_menu = atoi(valbuf) > 0;
 			} else if(!strcmp(strbuf, "enable_pendulum_scale")) {
 				gameConf.chkEnablePScale = atoi(valbuf);
+			} else if (!strcmp(strbuf, "skin_index")) {
+				gameConf.skin_index = atoi(valbuf);
 			} else {
 				// options allowing multiple words
 				sscanf(linebuf, "%s = %240[^\n]", strbuf, valbuf);
@@ -1361,6 +1382,8 @@ void Game::LoadConfig() {
 				gameConf.resize_popup_menu = atoi(valbuf) > 0;
 			} else if(!strcmp(strbuf, "enable_pendulum_scale")) {
 				gameConf.chkEnablePScale = atoi(valbuf);
+			} else if (!strcmp(strbuf, "skin_index")) {
+				gameConf.skin_index = atoi(valbuf);
 			} else {
 				// options allowing multiple words
 				sscanf(linebuf, "%s = %240[^\n]", strbuf, valbuf);
@@ -1445,6 +1468,7 @@ void Game::SaveConfig() {
 	fprintf(fp, "window_height = %d\n", gameConf.window_height);
 	fprintf(fp, "resize_popup_menu = %d\n", gameConf.resize_popup_menu ? 1 : 0);
 	fprintf(fp, "enable_pendulum_scale = %d\n", ((mainGame->chkEnablePScale->isChecked()) ? 1 : 0));
+	fprintf(fp, "skin_index = %d\n", gameConf.skin_index);
 	fclose(fp);
 }
 void Game::ShowCardInfo(int code, bool resize) {
@@ -1579,6 +1603,14 @@ void Game::AddChatMsg(wchar_t* msg, int player) {
 			chatMsg[0].append(L"[---]: ");
 	}
 	chatMsg[0].append(msg);
+	wchar_t msg_front[256];
+	myswprintf(msg_front, L"[Chat]%ls", chatMsg[0].c_str());
+	lstLog->addItem(msg_front);
+}
+void Game::ClearChatMsg() {
+	for(int i = 7; i >= 0; --i) {
+		chatTiming[i] = 0;
+	}
 }
 #endif //YGOPRO_SERVER_MODE
 void Game::AddDebugMsg(char* msg)
@@ -1760,7 +1792,7 @@ void Game::OnResize() {
 	wANRace->setRelativePosition(ResizeWin(480, 200, 850, 410));
 	wReplaySave->setRelativePosition(ResizeWin(510, 200, 820, 320));
 	stHintMsg->setRelativePosition(ResizeWin(500, 60, 820, 90));
-	
+
 	//sound / music volume bar
 	scrSoundVolume->setRelativePosition(recti(20 + 126, 200 + 4, 20 + (300 * xScale) - 40, 200 + 21));
 	scrMusicVolume->setRelativePosition(recti(20 + 126, 230 + 4, 20 + (300 * xScale) - 40, 230 + 21));
@@ -1782,8 +1814,8 @@ void Game::OnResize() {
 		btnReset->setRelativePosition(recti(1, 1, width, height));
 	}
 
-	wCardImg->setRelativePosition(Resize(1, 1, 1 + CARD_IMG_WIDTH + 20, 1 + CARD_IMG_HEIGHT + 18));
-	imgCard->setRelativePosition(Resize(10, 9, 10 + CARD_IMG_WIDTH, 9 + CARD_IMG_HEIGHT));
+	wCardImg->setRelativePosition(ResizeCard(1, 1, 20, 18));
+	imgCard->setRelativePosition(ResizeCard(10, 9, 0, 0));
 	wInfos->setRelativePosition(Resize(1, 275, 301, 639));
 	stName->setRelativePosition(recti(10, 10, 287 * xScale, 32));
 	lstLog->setRelativePosition(Resize(10, 10, 290, 290));
@@ -1865,6 +1897,56 @@ recti Game::ResizeElem(s32 x, s32 y, s32 x2, s32 y2) {
 	y = y * yScale;
 	x2 = sx + x;
 	y2 = sy + y;
+	return recti(x, y, x2, y2);
+}
+recti Game::ResizeCard(s32 x, s32 y, s32 x2, s32 y2) {
+	float mul = xScale;
+	if(xScale > yScale)
+		mul = yScale;
+	s32 sx = CARD_IMG_WIDTH * mul + x2 * xScale;
+	s32 sy = CARD_IMG_HEIGHT * mul + y2 * yScale;
+	x = x * xScale;
+	y = y * yScale;
+	x2 = sx + x;
+	y2 = sy + y;
+	return recti(x, y, x2, y2);
+}
+recti Game::ResizeCardHint(s32 x, s32 y, s32 x2, s32 y2) {
+	return ResizeCardMid(x, y, x2, y2, (x + x2) * 0.5, (y + y2) * 0.5);
+}
+position2di Game::ResizeCardHint(s32 x, s32 y) {
+	return ResizeCardMid(x, y, x + CARD_IMG_WIDTH * 0.5, y + CARD_IMG_HEIGHT * 0.5);
+}
+recti Game::ResizeCardMid(s32 x, s32 y, s32 x2, s32 y2, s32 midx, s32 midy) {
+	float mul = xScale;
+	if(xScale > yScale)
+		mul = yScale;
+	s32 cx = midx * xScale;
+	s32 cy = midy * yScale;
+	x = cx + (x - midx) * mul;
+	y = cy + (y - midy) * mul;
+	x2 = cx + (x2 - midx) * mul;
+	y2 = cy + (y2 - midy) * mul;
+	return recti(x, y, x2, y2);
+}
+position2di Game::ResizeCardMid(s32 x, s32 y, s32 midx, s32 midy) {
+	float mul = xScale;
+	if(xScale > yScale)
+		mul = yScale;
+	s32 cx = midx * xScale;
+	s32 cy = midy * yScale;
+	x = cx + (x - midx) * mul;
+	y = cy + (y - midy) * mul;
+	return position2di(x, y);
+}
+recti Game::ResizeForced(s32 x, s32 y, s32 x2, s32 y2) {
+	float mul = xScale;
+	if(xScale > yScale)
+		mul = yScale;
+	x = x * mul;
+	y = y * mul;
+	x2 = x2 * mul;
+	y2 = y2 * mul;
 	return recti(x, y, x2, y2);
 }
 void Game::SetWindowsIcon() {
